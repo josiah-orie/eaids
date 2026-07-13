@@ -1,0 +1,15 @@
+package com.feadev.eaids.adminprofile.model.enums;
+
+public enum AdminPermissionScope {
+    SUPER_ADMIN_I,
+    SUPER_ADMIN_II,
+    DIRECTOR_OPERATIONS,
+    DIRECTOR_FOOTBALL_DEV,
+    DIRECTOR_SCOUTING,
+    DIRECTOR_ACADEMY,
+    DIRECTOR_WELFARE,
+    DIRECTOR_ADAPTIVE,
+    DIRECTOR_MEDIA,
+    DIRECTOR_COMMERCIAL,
+    DIRECTOR_FINANCE
+}
