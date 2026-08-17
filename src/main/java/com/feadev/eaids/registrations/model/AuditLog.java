@@ -27,7 +27,7 @@ public class AuditLog {
     private UUID id;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     private AuditAction action;
 
     @Column(name = "user_id", columnDefinition = "BINARY(16)")

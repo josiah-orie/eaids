@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -80,6 +81,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/development-plans/**").authenticated()
                         .requestMatchers("/api/v1/video-library/**").authenticated()
                         .requestMatchers("/api/v1/camps/**").authenticated()
+                        .requestMatchers("/api/v1/events/*/register/guest", "/api/v1/events/*/register/guest/cancel").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/events").permitAll()
+                        .requestMatchers("/api/v1/events/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

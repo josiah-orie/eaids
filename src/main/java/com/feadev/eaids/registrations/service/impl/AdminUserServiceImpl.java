@@ -44,7 +44,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final AuditService auditService;
 
     @Override
-    public UserDetailResponse createUser(CreateUserRequest request) {
+    public UserDetailResponse  createUser(CreateUserRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already in use: " + request.getEmail());
         }
@@ -60,7 +60,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         UserStatus status = request.getStatus() != null
                 ? UserStatus.valueOf(request.getStatus().toUpperCase())
-                : UserStatus.ACTIVE;
+                : UserStatus.PENDING_VERIFICATION;
 
         User user = User.builder()
                 .email(request.getEmail())
