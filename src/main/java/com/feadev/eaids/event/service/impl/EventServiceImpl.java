@@ -10,6 +10,7 @@ import com.feadev.eaids.event.repository.EventSpecification;
 import com.feadev.eaids.event.service.EventService;
 import com.feadev.eaids.registrations.exception.ResourceNotFoundException;
 import com.feadev.eaids.registrations.service.StorageService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,9 @@ public class EventServiceImpl implements EventService {
 
     private final EventRepository eventRepository;
     private final StorageService storageService;
+
+    @Value("${app.base-url}")
+    private String baseUrl;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/jpg", "image/png");
 
@@ -74,7 +78,7 @@ public class EventServiceImpl implements EventService {
         if (image != null && !image.isEmpty()) {
             validateImageFile(image);
             String storedPath = storageService.store(image, "events/" + saved.getId() + "/image");
-            saved.setImagePath(storedPath);
+            saved.setImagePath(buildAbsoluteImageUrl(storedPath));
             saved.setEventImage(image.getOriginalFilename());
             saved = eventRepository.save(saved);
         }
@@ -165,10 +169,10 @@ public class EventServiceImpl implements EventService {
         if (image != null && !image.isEmpty()) {
             validateImageFile(image);
             if (event.getImagePath() != null) {
-                storageService.delete(event.getImagePath());
+                storageService.delete(extractRelativePath(event.getImagePath()));
             }
             String storedPath = storageService.store(image, "events/" + event.getId() + "/image");
-            event.setImagePath(storedPath);
+            event.setImagePath(buildAbsoluteImageUrl(storedPath));
             event.setEventImage(image.getOriginalFilename());
         }
 
@@ -250,5 +254,23 @@ public class EventServiceImpl implements EventService {
                 .createdBy(event.getCreatedBy())
                 .lastModifiedBy(event.getLastModifiedBy())
                 .build();
+    }
+
+    private String buildAbsoluteImageUrl(String relativePath) {
+        String base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
+        return base + "/storage/" + path;
+    }
+
+    private String extractRelativePath(String absoluteUrl) {
+        String base = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        String storagePrefix = base + "storage/";
+        if (absoluteUrl.startsWith(storagePrefix)) {
+            return absoluteUrl.substring(storagePrefix.length());
+        }
+        if (absoluteUrl.startsWith(base)) {
+            return absoluteUrl.substring(base.length());
+        }
+        return absoluteUrl; // fallback: return as-is if not prefixed
     }
 }

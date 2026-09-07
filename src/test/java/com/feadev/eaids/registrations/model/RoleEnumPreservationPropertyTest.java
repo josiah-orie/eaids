@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Property 2: Preservation - Existing Role Values Unchanged</p>
  */
+@Tag("docker")
 class RoleEnumPreservationPropertyTest {
 
     private static final String CONTAINER_NAME = "eaids-role-enum-preservation-test-mysql";

@@ -22,13 +22,15 @@ class RolePermissionMatrixPropertyTest {
     private static final Map<UserRole, Set<String>> ALLOWED_PATHS = Map.of(
             UserRole.ROLE_ATHLETE, Set.of("/api/v1/athletes"),
             UserRole.ROLE_COACH, Set.of("/api/v1/coaches"),
-            UserRole.ROLE_ADMIN, Set.of("/api/v1/admin")
+            UserRole.ROLE_ADMIN, Set.of("/api/v1/admin"),
+            UserRole.ROLE_SCOUT, Set.of("/api/v1/scouts")
     );
 
     private static final List<String> ALL_PROTECTED_PREFIXES = List.of(
             "/api/v1/athletes",
             "/api/v1/coaches",
-            "/api/v1/admin"
+            "/api/v1/admin",
+            "/api/v1/scouts"
     );
 
     @Property

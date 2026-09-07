@@ -4,6 +4,8 @@ import com.feadev.eaids.scouting.dto.request.GrantScopeRequest;
 import com.feadev.eaids.scouting.dto.response.ScoutProfileResponse;
 import com.feadev.eaids.scouting.dto.response.ScopeResponse;
 import com.feadev.eaids.scouting.service.ScoutProfileService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,11 +20,14 @@ import java.util.UUID;
 @RequestMapping("/api/v1/admin/scouts")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Admin - Scouts", description = "Administrative endpoints for retrieving scout profiles and managing scopes")
 public class AdminScoutController {
 
     private final ScoutProfileService scoutProfileService;
 
     @GetMapping("/{scoutUserId}")
+    @Operation(summary = "Get scout profile by user UUID",
+            description = "Retrieve a scout's profile using the scout's User UUID")
     public ResponseEntity<ScoutProfileResponse> getScoutProfile(@PathVariable UUID scoutUserId) {
         return ResponseEntity.ok(scoutProfileService.getProfile(scoutUserId));
     }

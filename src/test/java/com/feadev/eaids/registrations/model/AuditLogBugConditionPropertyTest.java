@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Property 1: Bug Condition - New AuditAction Values Rejected by Native ENUM Column</p>
  */
+@Tag("docker")
 class AuditLogBugConditionPropertyTest {
 
     /**

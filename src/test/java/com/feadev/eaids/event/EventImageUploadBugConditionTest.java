@@ -1,7 +1,5 @@
 package com.feadev.eaids.event;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.feadev.eaids.event.controller.EventController;
 import com.feadev.eaids.event.dto.request.CreateEventRequest;
 import com.feadev.eaids.event.dto.request.UpdateEventRequest;
@@ -20,7 +18,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -33,29 +30,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Bug Condition Exploration Test — Event Image Upload Rejected by JSON-Only Endpoints.
+ * Bug Condition Exploration Test — Event Multipart Form Data Binding with Image Upload.
  *
  * <p><b>Validates: Requirements 1.1, 1.2, 1.3, 2.1, 2.2, 2.3</b></p>
  *
  * <p>This test encodes the EXPECTED (correct) behavior: the event endpoints should accept
- * multipart form-data with an image file and return a response with a valid imagePath.
- * On UNFIXED code, these tests will FAIL because the current controller only accepts
- * JSON @RequestBody — confirming the bug exists.</p>
+ * multipart/form-data with form fields bound via @ModelAttribute and an optional eventImage
+ * file part via @RequestPart. On UNFIXED code (with @RequestBody), these tests FAIL with
+ * HTTP 415 HttpMediaTypeNotSupportedException — confirming the bug exists.</p>
  *
- * <p><b>Bug Condition:</b> When an admin attempts to create or update an event with an image file,
- * the system cannot accept it because the controller only accepts JSON (@RequestBody).
- * StorageService is not injected into EventServiceImpl, so store() is never called.</p>
+ * <p><b>Bug Condition:</b> When a client sends multipart/form-data to POST /api/v1/events
+ * or PUT /api/v1/events/{id}, the @RequestBody annotation triggers JSON deserialization
+ * which fails for multipart content.</p>
  *
  * <p><b>Expected Counterexamples on unfixed code:</b></p>
  * <ul>
- *   <li>Multipart POST to /api/v1/events returns 400/415/500 (endpoint does not consume multipart)</li>
- *   <li>Multipart PUT to /api/v1/events/{id} returns 400/415/500 (endpoint does not consume multipart)</li>
- *   <li>imagePath is null — StorageService not injected, store() never called</li>
- *   <li>EventService.createEvent() signature has no MultipartFile parameter</li>
+ *   <li>Multipart POST to /api/v1/events returns 415 (HttpMediaTypeNotSupportedException)</li>
+ *   <li>Multipart PUT to /api/v1/events/{id} returns 415 (HttpMediaTypeNotSupportedException)</li>
+ *   <li>Service layer is never reached due to controller binding failure</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
 class EventImageUploadBugConditionTest {
+
+    private static final String BASE_URL = "http://localhost:8080";
 
     private MockMvc mockMvc;
 
@@ -65,60 +63,33 @@ class EventImageUploadBugConditionTest {
     @InjectMocks
     private EventController eventController;
 
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule());
-
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(eventController).build();
     }
 
     /**
-     * Test: POST /api/v1/events with multipart/form-data containing event JSON + image file
-     * should return 201 with imagePath starting with "events/".
+     * Test: POST /api/v1/events with multipart/form-data form fields + image file
+     * should return 201 with imagePath populated.
      *
-     * <p>On UNFIXED code: Expected to FAIL because the endpoint uses @RequestBody (JSON only)
-     * and does not consume multipart/form-data. The controller method parameter binding
-     * will fail since it expects JSON body, not multipart parts.</p>
+     * <p>On UNFIXED code: Expected to FAIL with 415 because @RequestBody cannot handle
+     * multipart/form-data content type.</p>
      *
-     * <p>After fix: The endpoint will accept multipart, parse the "event" JSON part and
-     * "image" file part, and return 201 with a valid imagePath.</p>
+     * <p>After fix (@ModelAttribute): Form fields are bound via setters, image via @RequestPart,
+     * returning 201 with valid imagePath.</p>
      */
     @Test
     @DisplayName("Bug Condition: POST multipart with image should return 201 with valid imagePath")
     void createEventWithMultipartImage_shouldReturn201WithImagePath() throws Exception {
-        // Arrange: valid event JSON metadata
-        CreateEventRequest eventRequest = CreateEventRequest.builder()
-                .name("Lagos Showcase 2025")
-                .description("Annual football showcase event")
-                .eventType("Showcase")
-                .location("Teslim Balogun Stadium")
-                .country("Nigeria")
-                .state("Lagos")
-                .startDate(LocalDate.now().plusDays(30))
-                .endDate(LocalDate.now().plusDays(31))
-                .capacity(500)
-                .build();
-
-        String eventJson = objectMapper.writeValueAsString(eventRequest);
-
-        // Arrange: a valid JPEG image file
+        // Arrange: image file part using the correct parameter name "eventImage"
         MockMultipartFile imageFile = new MockMultipartFile(
-                "image",
+                "eventImage",
                 "event-banner.jpg",
                 MediaType.IMAGE_JPEG_VALUE,
                 "fake-jpeg-content".getBytes()
         );
 
-        // Arrange: the event JSON as a multipart part with content type application/json
-        MockMultipartFile eventPart = new MockMultipartFile(
-                "event",
-                "",
-                MediaType.APPLICATION_JSON_VALUE,
-                eventJson.getBytes()
-        );
-
-        // Mock service: on unfixed code this won't be reached due to binding failure
+        // Mock service response — service now returns absolute URL for imagePath
         UUID eventId = UUID.randomUUID();
         EventResponse expectedResponse = EventResponse.builder()
                 .id(eventId)
@@ -131,67 +102,58 @@ class EventImageUploadBugConditionTest {
                 .startDate(LocalDate.now().plusDays(30))
                 .endDate(LocalDate.now().plusDays(31))
                 .capacity(500)
-                .imagePath("events/" + eventId + "/image/event-banner.jpg")
+                .imagePath(BASE_URL + "/storage/events/" + eventId + "/image/event-banner.jpg")
                 .eventImage("event-banner.jpg")
                 .build();
 
-        when(eventService.createEvent(any(CreateEventRequest.class), any())).thenReturn(expectedResponse);
+        when(eventService.createEvent(any(CreateEventRequest.class), any(MultipartFile.class)))
+                .thenReturn(expectedResponse);
 
-        // Act & Assert: multipart POST should be accepted and return 201 with valid imagePath
+        // Act & Assert: multipart POST with form fields + image should return 201
         MvcResult result = mockMvc.perform(multipart("/api/v1/events")
                         .file(imageFile)
-                        .file(eventPart)
+                        .param("name", "Lagos Showcase 2025")
+                        .param("description", "Annual football showcase event")
+                        .param("eventType", "Showcase")
+                        .param("location", "Teslim Balogun Stadium")
+                        .param("country", "Nigeria")
+                        .param("state", "Lagos")
+                        .param("startDate", LocalDate.now().plusDays(30).toString())
+                        .param("endDate", LocalDate.now().plusDays(31).toString())
+                        .param("capacity", "500")
                         .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.imagePath").exists())
                 .andExpect(jsonPath("$.imagePath").value(
-                        org.hamcrest.Matchers.startsWith("events/")))
+                        org.hamcrest.Matchers.startsWith("http")))
                 .andReturn();
 
-        // Verify response has a proper storage path (not a client-provided literal)
+        // Verify response has a proper absolute URL imagePath
         String responseBody = result.getResponse().getContentAsString();
         assertThat(responseBody).contains("\"imagePath\"");
     }
 
     /**
-     * Test: PUT /api/v1/events/{id} with multipart/form-data containing event JSON + image file
+     * Test: PUT /api/v1/events/{id} with multipart/form-data form fields + image file
      * should return 200 with updated imagePath.
      *
-     * <p>On UNFIXED code: Expected to FAIL because the update endpoint also uses @RequestBody
-     * (JSON only) and does not consume multipart/form-data.</p>
-     *
-     * <p>After fix: The endpoint will accept multipart PUT, parse the "event" JSON part and
-     * "image" file part, delete old image, store new image, and return 200.</p>
+     * <p>On UNFIXED code: Expected to FAIL with 415 because @RequestBody cannot handle
+     * multipart/form-data on the update endpoint.</p>
      */
     @Test
     @DisplayName("Bug Condition: PUT multipart with image should return 200 with updated imagePath")
     void updateEventWithMultipartImage_shouldReturn200WithUpdatedImagePath() throws Exception {
         UUID eventId = UUID.randomUUID();
 
-        // Arrange: update request JSON
-        UpdateEventRequest updateRequest = UpdateEventRequest.builder()
-                .name("Updated Lagos Showcase 2025")
-                .build();
-
-        String eventJson = objectMapper.writeValueAsString(updateRequest);
-
-        // Arrange: a valid PNG image file
+        // Arrange: image file
         MockMultipartFile imageFile = new MockMultipartFile(
-                "image",
+                "eventImage",
                 "new-banner.png",
                 MediaType.IMAGE_PNG_VALUE,
                 "fake-png-content".getBytes()
         );
 
-        // Arrange: the event JSON as a multipart part
-        MockMultipartFile eventPart = new MockMultipartFile(
-                "event",
-                "",
-                MediaType.APPLICATION_JSON_VALUE,
-                eventJson.getBytes()
-        );
-
-        // Mock service
+        // Mock service response — service now returns absolute URL for imagePath
         EventResponse expectedResponse = EventResponse.builder()
                 .id(eventId)
                 .name("Updated Lagos Showcase 2025")
@@ -199,17 +161,17 @@ class EventImageUploadBugConditionTest {
                 .status(EventStatus.DRAFT.name())
                 .location("Teslim Balogun Stadium")
                 .country("Nigeria")
-                .imagePath("events/" + eventId + "/image/new-banner.png")
+                .imagePath(BASE_URL + "/storage/events/" + eventId + "/image/new-banner.png")
                 .eventImage("new-banner.png")
                 .build();
 
-        when(eventService.updateEvent(any(UUID.class), any(UpdateEventRequest.class), any()))
+        when(eventService.updateEvent(any(UUID.class), any(UpdateEventRequest.class), any(MultipartFile.class)))
                 .thenReturn(expectedResponse);
 
-        // Act & Assert: multipart PUT should be accepted and return 200 with valid imagePath
+        // Act & Assert: multipart PUT with form fields + image should return 200
         mockMvc.perform(multipart("/api/v1/events/{eventId}", eventId)
                         .file(imageFile)
-                        .file(eventPart)
+                        .param("name", "Updated Lagos Showcase 2025")
                         .with(request -> {
                             request.setMethod("PUT");
                             return request;
@@ -218,53 +180,26 @@ class EventImageUploadBugConditionTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imagePath").exists())
                 .andExpect(jsonPath("$.imagePath").value(
-                        org.hamcrest.Matchers.startsWith("events/")));
+                        org.hamcrest.Matchers.startsWith("http")));
     }
 
     /**
-     * Test: When an image file is provided during event creation, the service should be called
-     * and the response must contain a valid imagePath (evidence that StorageService.store() worked).
+     * Test: When an image file is provided during event creation, the service should be
+     * invoked with both the request DTO and the MultipartFile, and the response must
+     * contain a valid imagePath.
      *
-     * <p>On UNFIXED code: Expected to FAIL because:</p>
-     * <ol>
-     *   <li>The controller binds @RequestBody, not @RequestPart, so multipart is not parsed</li>
-     *   <li>The service signature is createEvent(CreateEventRequest) — no MultipartFile param</li>
-     *   <li>Even if service is called, StorageService is not injected so store() cannot run</li>
-     * </ol>
-     *
-     * <p>This test verifies the full expected flow: controller accepts multipart → calls service
-     * → response contains imagePath indicating file was stored.</p>
+     * <p>On UNFIXED code: Expected to FAIL because @RequestBody causes 415 before the
+     * service is ever reached.</p>
      */
     @Test
     @DisplayName("Bug Condition: Service should be invoked and response should have imagePath from StorageService")
     void createEventWithImage_responseShouldContainStoragePath() throws Exception {
-        // Arrange
-        CreateEventRequest eventRequest = CreateEventRequest.builder()
-                .name("Abuja Combine 2025")
-                .description("Football combine event")
-                .eventType("Combine")
-                .location("National Stadium Abuja")
-                .country("Nigeria")
-                .state("FCT")
-                .startDate(LocalDate.now().plusDays(60))
-                .endDate(LocalDate.now().plusDays(61))
-                .capacity(200)
-                .build();
-
-        String eventJson = objectMapper.writeValueAsString(eventRequest);
-
+        // Arrange: image file
         MockMultipartFile imageFile = new MockMultipartFile(
-                "image",
+                "eventImage",
                 "combine-photo.jpg",
                 MediaType.IMAGE_JPEG_VALUE,
                 "fake-jpeg-data-for-combine".getBytes()
-        );
-
-        MockMultipartFile eventPart = new MockMultipartFile(
-                "event",
-                "",
-                MediaType.APPLICATION_JSON_VALUE,
-                eventJson.getBytes()
         );
 
         UUID eventId = UUID.randomUUID();
@@ -275,23 +210,32 @@ class EventImageUploadBugConditionTest {
                 .status(EventStatus.DRAFT.name())
                 .location("National Stadium Abuja")
                 .country("Nigeria")
-                .imagePath("events/" + eventId + "/image/combine-photo.jpg")
+                .imagePath(BASE_URL + "/storage/events/" + eventId + "/image/combine-photo.jpg")
                 .eventImage("combine-photo.jpg")
                 .build();
 
-        when(eventService.createEvent(any(CreateEventRequest.class), any())).thenReturn(mockResponse);
+        when(eventService.createEvent(any(CreateEventRequest.class), any(MultipartFile.class)))
+                .thenReturn(mockResponse);
 
-        // Act: On unfixed code, the multipart POST fails at controller binding layer
+        // Act: multipart POST with form fields + image
         mockMvc.perform(multipart("/api/v1/events")
                         .file(imageFile)
-                        .file(eventPart)
+                        .param("name", "Abuja Combine 2025")
+                        .param("description", "Football combine event")
+                        .param("eventType", "Combine")
+                        .param("location", "National Stadium Abuja")
+                        .param("country", "Nigeria")
+                        .param("state", "FCT")
+                        .param("startDate", LocalDate.now().plusDays(60).toString())
+                        .param("endDate", LocalDate.now().plusDays(61).toString())
+                        .param("capacity", "200")
                         .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.imagePath").value(
-                        org.hamcrest.Matchers.startsWith("events/")))
+                        org.hamcrest.Matchers.startsWith("http")))
                 .andExpect(jsonPath("$.eventImage").value("combine-photo.jpg"));
 
-        // Verify: service was actually invoked (on unfixed code, binding fails so service never called)
-        verify(eventService, times(1)).createEvent(any(CreateEventRequest.class), any());
+        // Verify service was invoked with both arguments
+        verify(eventService, times(1)).createEvent(any(CreateEventRequest.class), any(MultipartFile.class));
     }
 }

@@ -41,8 +41,8 @@ public class EventController {
     @Operation(summary = "Create a new event", description = "Creates a new event in DRAFT status. Admin only.")
     @ApiResponse(responseCode = "201", description = "Event created successfully")
     public ResponseEntity<EventResponse> createEvent(
-            @Valid @RequestPart("event") CreateEventRequest request,
-            @RequestPart(value = "image", required = false) MultipartFile image) {
+            @Valid @ModelAttribute CreateEventRequest request,
+            @RequestPart(value = "eventImage", required = false) MultipartFile image) {
         EventResponse response = eventService.createEvent(request, image);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -83,8 +83,8 @@ public class EventController {
     @Operation(summary = "Update an event", description = "Updates an event. Only DRAFT events can be updated. Admin only.")
     public ResponseEntity<EventResponse> updateEvent(
             @PathVariable UUID eventId,
-            @Valid @RequestPart("event") UpdateEventRequest request,
-            @RequestPart(value = "image", required = false) MultipartFile image) {
+            @Valid @ModelAttribute UpdateEventRequest request,
+            @RequestPart(value = "eventImage", required = false) MultipartFile image) {
         return ResponseEntity.ok(eventService.updateEvent(eventId, request, image));
     }
 

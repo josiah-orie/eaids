@@ -86,4 +86,84 @@ public class EmailServiceImpl implements EmailService {
             log.error("Failed to send password setup email to {}: {}", email, e.getMessage(), e);
         }
     }
+
+    @Override
+    public void sendApplicationApprovedEmail(String email, String name) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(FROM_ADDRESS);
+            message.setTo(email);
+            message.setSubject("Your EAIDS Academy application has been approved");
+            message.setText("Hello " + name + ",\n\n"
+                    + "Congratulations! Your application to the EAIDS Academy has been approved.\n\n"
+                    + "Our team will be in touch with the next steps, including training schedule "
+                    + "assignments.\n\n"
+                    + "Welcome aboard,\nThe EAIDS Academy Team");
+
+            mailSender.send(message);
+            log.info("Academy approval email sent to {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send academy approval email to {}: {}", email, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void sendApplicationRejectedEmail(String email, String name, String reason) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(FROM_ADDRESS);
+            message.setTo(email);
+            message.setSubject("Update on your EAIDS Academy application");
+            message.setText("Hello " + name + ",\n\n"
+                    + "Thank you for your interest in the EAIDS Academy. "
+                    + "After careful review, we are unable to approve your application at this time.\n\n"
+                    + "Reason: " + reason + "\n\n"
+                    + "You are welcome to reapply in the future.\n\n"
+                    + "Best regards,\nThe EAIDS Academy Team");
+
+            mailSender.send(message);
+            log.info("Academy rejection email sent to {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send academy rejection email to {}: {}", email, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void sendStaffAssignmentEmail(String email, String name, String scheduleTitle) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(FROM_ADDRESS);
+            message.setTo(email);
+            message.setSubject("You have been assigned to an EAIDS Academy training schedule");
+            message.setText("Hello " + name + ",\n\n"
+                    + "You have been assigned to the training schedule: \"" + scheduleTitle + "\".\n\n"
+                    + "Please log in to the EAIDS platform to view the details.\n\n"
+                    + "Best regards,\nThe EAIDS Academy Team");
+
+            mailSender.send(message);
+            log.info("Academy staff assignment email sent to {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send academy staff assignment email to {}: {}", email, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void sendEnrollmentEmail(String email, String name, String scheduleTitle, String startDate) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(FROM_ADDRESS);
+            message.setTo(email);
+            message.setSubject("You have been enrolled in an EAIDS Academy training schedule");
+            message.setText("Hello " + name + ",\n\n"
+                    + "You have been enrolled in the training schedule: \"" + scheduleTitle + "\""
+                    + (startDate != null ? ", starting on " + startDate : "") + ".\n\n"
+                    + "Please log in to the EAIDS platform to view the details.\n\n"
+                    + "Best regards,\nThe EAIDS Academy Team");
+
+            mailSender.send(message);
+            log.info("Academy enrollment email sent to {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send academy enrollment email to {}: {}", email, e.getMessage(), e);
+        }
+    }
 }

@@ -38,6 +38,8 @@
 		<jqwik.version>1.9.2</jqwik.version>
 		<spring-retry.version>2.0.11</spring-retry.version>
 		<testcontainers.version>1.20.4</testcontainers.version>
+		<!-- Test groups excluded from the default test run; overridden by the "docker" profile -->
+		<test.excludedGroups>docker</test.excludedGroups>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -221,6 +223,18 @@
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!--
+						Docker-backed tests (Testcontainers / MySQL-container property tests) are
+						tagged "docker" and excluded from the default test run so builds pass on
+						machines without a Docker daemon. Run them with: ./mvnw test -Pdocker
+					-->
+					<excludedGroups>${test.excludedGroups}</excludedGroups>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<executions>
 					<execution>
@@ -257,5 +271,19 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+			Activate with: ./mvnw test -Pdocker
+			Runs the Docker-backed tests (Testcontainers + MySQL-container property tests)
+			that are tagged "docker" and excluded by default.
+		-->
+		<profile>
+			<id>docker</id>
+			<properties>
+				<test.excludedGroups></test.excludedGroups>
+			</properties>
+		</profile>
+	</profiles>
 
 </project>

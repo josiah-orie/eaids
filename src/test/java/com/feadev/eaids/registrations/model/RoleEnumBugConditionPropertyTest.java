@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Property 1: Bug Condition - ROLE_SCOUT Accepted by ENUM Columns</p>
  */
+@Tag("docker")
 class RoleEnumBugConditionPropertyTest {
 
     private static final String CONTAINER_NAME = "eaids-role-enum-bug-test-mysql";

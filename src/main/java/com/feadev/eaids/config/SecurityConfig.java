@@ -62,6 +62,7 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/storage/**").permitAll()
                         .requestMatchers(PERMIT_FRONTEND_PAGES).permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Role-based access (method-level @PreAuthorize handles fine-grained control)
@@ -81,6 +82,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/development-plans/**").authenticated()
                         .requestMatchers("/api/v1/video-library/**").authenticated()
                         .requestMatchers("/api/v1/camps/**").authenticated()
+                        // Academy public onboarding (no authentication required)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/academy/applications/individuals", "/api/v1/academy/applications/institutions").permitAll()
+                        // Academy admin routes
+                        .requestMatchers("/api/v1/academy/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/events/*/register/guest", "/api/v1/events/*/register/guest/cancel").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/events").permitAll()
                         .requestMatchers("/api/v1/events/**").authenticated()

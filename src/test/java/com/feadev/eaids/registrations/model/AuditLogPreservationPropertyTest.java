@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Property 2: Preservation - Original AuditAction Values Insert and Query Correctly</p>
  */
+@Tag("docker")
 class AuditLogPreservationPropertyTest {
 
     /**

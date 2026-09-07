@@ -1,0 +1,14 @@
+package com.feadev.eaids.academy.repository;
+
+import com.feadev.eaids.academy.model.AcademyTrainingSchedule;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
+
+import java.util.UUID;
+
+@Repository
+public interface AcademyTrainingScheduleRepository
+        extends JpaRepository<AcademyTrainingSchedule, UUID>,
+        JpaSpecificationExecutor<AcademyTrainingSchedule> {
+}

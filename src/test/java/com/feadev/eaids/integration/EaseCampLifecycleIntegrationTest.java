@@ -43,8 +43,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * 6. Verify data consistency and business rules
  */
 @SpringBootTest
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("integration")
+@Tag("docker")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class EaseCampLifecycleIntegrationTest {
 
