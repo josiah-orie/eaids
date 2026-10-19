@@ -396,3 +396,73 @@ curl -X GET "http://localhost:8080/api/v1/fixtures/$FIXTURE_ID/post-game" \
 | Unauthenticated read | 401 | `Unauthorized: Authentication is required...` |
 | Non-admin recompute or field-level update | 403 | `Forbidden: You do not have permission...` |
 | Update on non-active fixture | 400 | `Post-game stats can only be updated when the fixture is IN_PROGRESS or COMPLETED. Current status: {status}` |
+
+---
+
+## Look Up Team Players (Get teamPlayerId Values)
+
+Before submitting or updating post-game stats, you need the `teamPlayerId` for each player. Use this endpoint to list all players on a team.
+
+**Roles:** ADMIN, COACH, SCOUT
+
+```bash
+curl -X GET "http://localhost:8080/api/v1/leagues/{leagueId}/teams/{teamId}/players" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `leagueId` | UUID | The league the team belongs to |
+| `teamId` | UUID | The team whose roster you want |
+
+**Response (200 OK):** JSON array of player objects:
+
+```json
+[
+  {
+    "teamPlayerId": "pp1a2b3c-d4e5-6789-abcd-ef1234567890",
+    "athleteId": "au1b2c3d-e4f5-6789-bcde-f12345678901",
+    "athleteEmail": "emeka.obi@example.com",
+    "jerseyNumber": 12,
+    "position": "QUARTERBACK",
+    "status": "ACTIVE",
+    "draftedDate": "2024-03-15",
+    "releasedDate": null
+  },
+  {
+    "teamPlayerId": "pp2b3c4d-e5f6-7890-bcde-f23456789012",
+    "athleteId": "au2c3d4e-f5a6-7890-cdef-123456789012",
+    "athleteEmail": "biodun.ola@example.com",
+    "jerseyNumber": 55,
+    "position": "LINEBACKER",
+    "status": "ACTIVE",
+    "draftedDate": "2024-03-15",
+    "releasedDate": null
+  }
+]
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `teamPlayerId` | UUID | The player's roster entry ID — use this as `teamPlayerId` in post-game stat endpoints |
+| `athleteId` | UUID | The underlying athlete (user) ID |
+| `athleteEmail` | String | The athlete's email address |
+| `jerseyNumber` | Integer | Jersey number (may be null if not assigned) |
+| `position` | String | Football position (e.g. `QUARTERBACK`, `LINEBACKER`) |
+| `status` | String | Roster status: `ACTIVE` or `INACTIVE` |
+| `draftedDate` | Date | Date the player joined the team |
+| `releasedDate` | Date | Date released, or `null` if still on the team |
+
+**Error (404 Not Found)** — team not found or team does not belong to the specified league:
+```json
+{
+  "status": 404,
+  "message": "Team {teamId} does not belong to league {leagueId}"
+}
+```
+
+> **Tip:** Returns an empty array `[]` (not 404) when the team exists but has no players on its roster yet.
