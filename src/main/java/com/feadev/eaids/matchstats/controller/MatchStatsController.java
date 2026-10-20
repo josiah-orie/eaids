@@ -1,5 +1,6 @@
 package com.feadev.eaids.matchstats.controller;
 
+import com.feadev.eaids.matchstats.dto.request.CreateStatDefinitionRequest;
 import com.feadev.eaids.matchstats.dto.request.RecordMatchStatsRequest;
 import com.feadev.eaids.matchstats.dto.response.MatchStatDefinitionResponse;
 import com.feadev.eaids.matchstats.dto.response.MatchStatEntryResponse;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,6 +37,18 @@ public class MatchStatsController {
             @PathVariable UUID campId,
             @RequestParam(required = false) PositionGroup positionGroup) {
         return ResponseEntity.ok(matchStatsService.getDefinitions(positionGroup));
+    }
+
+    @PostMapping("/definitions")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Create a custom stat definition (Admin)", description = "Creates a new match stat definition for a given position group. Stat name must be unique within the position group.")
+    @ApiResponse(responseCode = "201", description = "Definition created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate stat name for position group")
+    @ApiResponse(responseCode = "403", description = "Access denied — ADMIN role required")
+    public ResponseEntity<MatchStatDefinitionResponse> createDefinition(
+            @PathVariable UUID campId,
+            @Valid @RequestBody CreateStatDefinitionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(matchStatsService.createDefinition(request));
     }
 
     @PostMapping

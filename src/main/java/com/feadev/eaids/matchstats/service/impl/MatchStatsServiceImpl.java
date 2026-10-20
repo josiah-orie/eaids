@@ -2,6 +2,7 @@ package com.feadev.eaids.matchstats.service.impl;
 
 import com.feadev.eaids.enrollment.model.CampEnrollment;
 import com.feadev.eaids.enrollment.repository.CampEnrollmentRepository;
+import com.feadev.eaids.matchstats.dto.request.CreateStatDefinitionRequest;
 import com.feadev.eaids.matchstats.dto.request.RecordMatchStatsRequest;
 import com.feadev.eaids.matchstats.dto.request.StatEntryRequest;
 import com.feadev.eaids.matchstats.dto.response.MatchStatDefinitionResponse;
@@ -47,6 +48,25 @@ public class MatchStatsServiceImpl implements MatchStatsService {
             definitions = definitionRepository.findByIsActiveTrue();
         }
         return definitions.stream().map(this::mapDefinitionToResponse).collect(Collectors.toList());
+    }
+
+    @Override
+    public MatchStatDefinitionResponse createDefinition(CreateStatDefinitionRequest request) {
+        if (definitionRepository.existsByStatNameAndPositionGroup(request.getStatName(), request.getPositionGroup())) {
+            throw new IllegalArgumentException(
+                    "A stat definition with name '" + request.getStatName() + "' already exists for position group " + request.getPositionGroup());
+        }
+
+        MatchStatDefinition definition = MatchStatDefinition.builder()
+                .positionGroup(request.getPositionGroup())
+                .statName(request.getStatName())
+                .unit(request.getUnit())
+                .displayOrder(request.getDisplayOrder())
+                .build();
+
+        MatchStatDefinition saved = definitionRepository.save(definition);
+        log.info("Created new stat definition '{}' for position group {}", saved.getStatName(), saved.getPositionGroup());
+        return mapDefinitionToResponse(saved);
     }
 
     @Override

@@ -89,6 +89,29 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/events/*/register/guest", "/api/v1/events/*/register/guest/cancel").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/events").permitAll()
                         .requestMatchers("/api/v1/events/**").authenticated()
+                        // League public read paths (scouts, coaches, any authenticated user)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/leagues/**").authenticated()
+                        // Commentary — SSE stream and history are public; publish is authenticated + role-checked by @PreAuthorize
+                        .requestMatchers(HttpMethod.GET, "/api/v1/fixtures/*/commentary/stream").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/fixtures/*/commentary").permitAll()
+                        // Post-game stats — read requires authentication; recompute is under /admin/** already
+                        .requestMatchers(HttpMethod.GET, "/api/v1/fixtures/*/post-game").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/fixtures/*/post-game/**").authenticated()
+                        // Injury risk — fine-grained access enforced by @PreAuthorize
+                        .requestMatchers("/api/v1/athletes/*/injury-risk").authenticated()
+                        .requestMatchers("/api/v1/injury-risk/trends/**").authenticated()
+                        // Medical module — all paths require authentication minimum;
+                        // fine-grained role checks are enforced at the service layer
+                        .requestMatchers("/api/v1/athletes/*/medical-profile/**").authenticated()
+                        .requestMatchers("/api/v1/athletes/*/medical-assessments/**").authenticated()
+                        .requestMatchers("/api/v1/medical-assessments/**").authenticated()
+                        .requestMatchers("/api/v1/athletes/*/injuries/**").authenticated()
+                        .requestMatchers("/api/v1/injuries/**").authenticated()
+                        .requestMatchers("/api/v1/athletes/*/medical-clearances/**").authenticated()
+                        .requestMatchers("/api/v1/medical-clearances/**").authenticated()
+                        .requestMatchers("/api/v1/athletes/*/participation-eligibility").authenticated()
+                        .requestMatchers("/api/v1/athletes/*/medical-documents/**").authenticated()
+                        .requestMatchers("/api/v1/medical-documents/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

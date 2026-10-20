@@ -65,4 +65,13 @@ public interface EmailService {
      * @param startDate     the schedule start date (ISO text)
      */
     void sendEnrollmentEmail(String email, String name, String scheduleTitle, String startDate);
+
+    /**
+     * Sends an urgent concussion / suspected head injury alert to medical staff.
+     *
+     * @param recipientEmail  the medical officer or admin email
+     * @param athleteEmail    the affected athlete's email (identifier — no clinical detail)
+     * @param reporterEmail   the person who reported the incident
+     */
+    void sendConcussionAlertEmail(String recipientEmail, String athleteEmail, String reporterEmail);
 }

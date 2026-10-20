@@ -166,4 +166,27 @@ public class EmailServiceImpl implements EmailService {
             log.error("Failed to send academy enrollment email to {}: {}", email, e.getMessage(), e);
         }
     }
+
+    @Override
+    public void sendConcussionAlertEmail(String recipientEmail, String athleteEmail,
+                                          String reporterEmail) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(FROM_ADDRESS);
+            message.setTo(recipientEmail);
+            message.setSubject("[URGENT] Suspected head injury / concussion reported — immediate review required");
+            message.setText("A suspected concussion or significant head injury has been reported.\n\n"
+                    + "Athlete account: " + athleteEmail + "\n"
+                    + "Reported by: " + reporterEmail + "\n\n"
+                    + "Please log in to the EAIDS platform immediately to review the injury record "
+                    + "and apply the appropriate concussion protocol.\n\n"
+                    + "This is an automated notification. Do not reply to this email.\n\n"
+                    + "EAIDS Medical Safety System");
+
+            mailSender.send(message);
+            log.info("Concussion alert email sent to {} for athlete {}", recipientEmail, athleteEmail);
+        } catch (Exception e) {
+            log.error("Failed to send concussion alert email to {}: {}", recipientEmail, e.getMessage(), e);
+        }
+    }
 }

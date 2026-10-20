@@ -135,6 +135,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(MedicalAccessException.class)
+    public ResponseEntity<ErrorResponse> handleMedicalAccess(MedicalAccessException ex) {
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(Instant.now().toString())
+                .status(HttpStatus.FORBIDDEN.value())
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred: {}", ex.getMessage(), ex);

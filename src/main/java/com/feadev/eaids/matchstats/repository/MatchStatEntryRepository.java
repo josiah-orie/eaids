@@ -24,4 +24,6 @@ public interface MatchStatEntryRepository extends JpaRepository<MatchStatEntry, 
 
     @Query("SELECT e FROM MatchStatEntry e WHERE e.campId = :campId AND e.definition.positionGroup = :positionGroup")
     List<MatchStatEntry> findByCampIdAndPositionGroup(@Param("campId") UUID campId, @Param("positionGroup") com.feadev.eaids.matchstats.model.enums.PositionGroup positionGroup);
+
+    List<MatchStatEntry> findByFixtureId(UUID fixtureId);
 }

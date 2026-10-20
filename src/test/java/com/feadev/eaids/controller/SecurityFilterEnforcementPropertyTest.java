@@ -100,6 +100,8 @@ class SecurityFilterEnforcementPropertyTest {
             case ROLE_COACH -> "/api/v1/coaches/";
             case ROLE_ADMIN -> "/api/v1/admin/";
             case ROLE_SCOUT -> "/api/v1/scouts/";
+            case ROLE_MEDICAL_OFFICER -> null;
+            case ROLE_PHYSIOTHERAPIST -> null;
         };
     }
 

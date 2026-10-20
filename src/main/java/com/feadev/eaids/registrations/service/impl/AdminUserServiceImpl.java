@@ -54,8 +54,10 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         UserRole role = UserRole.valueOf(request.getRole().toUpperCase());
 
-        if (role == UserRole.ROLE_SCOUT) {
-            return createScoutUser(request);
+        if (role == UserRole.ROLE_SCOUT
+                || role == UserRole.ROLE_MEDICAL_OFFICER
+                || role == UserRole.ROLE_PHYSIOTHERAPIST) {
+            return createInvitedUser(request, role);
         }
 
         UserStatus status = request.getStatus() != null
@@ -80,14 +82,21 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     private UserDetailResponse createScoutUser(CreateUserRequest request) {
-        // Scout accounts use a password setup flow — store a random placeholder password
+        return createInvitedUser(request, UserRole.ROLE_SCOUT);
+    }
+
+    /**
+     * Shared creation flow for admin-invited roles (Scout, Medical Officer, Physiotherapist).
+     * Stores a random placeholder password and sends a password-setup email.
+     */
+    private UserDetailResponse createInvitedUser(CreateUserRequest request, UserRole role) {
         String placeholderPassword = passwordEncoder.encode(UUID.randomUUID().toString());
 
         User user = User.builder()
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
                 .password(placeholderPassword)
-                .role(UserRole.ROLE_SCOUT)
+                .role(role)
                 .status(UserStatus.PENDING_VERIFICATION)
                 .emailVerified(false)
                 .phoneVerified(false)
@@ -96,7 +105,6 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         User savedUser = userRepository.save(user);
 
-        // Generate password setup token with 72-hour expiry
         String tokenValue = UUID.randomUUID().toString();
         PasswordResetToken setupToken = PasswordResetToken.builder()
                 .user(savedUser)
@@ -106,16 +114,15 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .build();
 
         passwordResetTokenRepository.save(setupToken);
-
-        // Send password setup email
         emailService.sendPasswordSetupEmail(savedUser.getEmail(), tokenValue);
 
-        // Audit log the scout registration
-        auditService.log(AuditAction.SCOUT_REGISTERED, savedUser.getId(), savedUser.getEmail(), null, null);
+        AuditAction auditAction = role == UserRole.ROLE_SCOUT
+                ? AuditAction.SCOUT_REGISTERED
+                : AuditAction.REGISTRATION;
+        auditService.log(auditAction, savedUser.getId(), savedUser.getEmail(), null, null);
 
-        log.info("Admin created scout user: userId={}, email={}, status=PENDING_VERIFICATION",
-                savedUser.getId(), savedUser.getEmail());
-
+        log.info("Admin created {} user: userId={}, email={}, status=PENDING_VERIFICATION",
+                role.name(), savedUser.getId(), savedUser.getEmail());
         return mapToDetailResponse(savedUser);
     }
 

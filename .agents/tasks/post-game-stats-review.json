@@ -1,0 +1,8 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    "`customStats: {}` stores \"\" not null — serializeCustomStats returns \"\" for an empty map, so sending {} writes \"\" to the column while computeAndStore writes null for the same logical state. Fix: summary.setCustomStats(json.isBlank() ? null : json) after the serialize call.",
+    "No unit tests for updatePostGameStats — status guard has four distinct branches, nine independently togglable fields, and the customStats null-vs-empty behaviour are all untested. Add service-layer tests covering: fixture-not-found, invalid status (SCHEDULED, CANCELLED, POSTPONED), summary-not-found, partial field update, and the customStats replace semantics."
+  ],
+  "reviewDoc": "/Users/mac/Documents/intelliJProjects/vicado360/Clients Projects/feadev/eaids/.agents/tasks/post-game-stats-review.md"
+}

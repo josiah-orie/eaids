@@ -122,7 +122,7 @@ public class PostGameStatsServiceImpl implements PostGameStatsService {
             summary.setSacks(nullIfZero(sacks));
             summary.setFumbles(nullIfZero(fumbles));
             summary.setPenalties(nullIfZero(penalties));
-            summary.setCustomStats(customStatsJson.isEmpty() ? null : customStatsJson);
+            summary.setCustomStats(customStatsJson);
             summary.setComputedAt(LocalDateTime.now());
 
             summaryRepository.save(summary);
@@ -256,12 +256,12 @@ public class PostGameStatsServiceImpl implements PostGameStatsService {
     }
 
     private String serializeCustomStats(Map<String, BigDecimal> map) {
-        if (map.isEmpty()) return "";
+        if (map == null || map.isEmpty()) return null;
         try {
             return objectMapper.writeValueAsString(map);
         } catch (JsonProcessingException e) {
             log.warn("Failed to serialize custom stats: {}", e.getMessage());
-            return "";
+            return null;
         }
     }
 

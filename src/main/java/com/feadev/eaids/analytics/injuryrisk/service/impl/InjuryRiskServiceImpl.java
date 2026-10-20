@@ -1,8 +1,13 @@
 package com.feadev.eaids.analytics.injuryrisk.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.feadev.eaids.analytics.injuryrisk.dto.HolisticRiskResponse;
 import com.feadev.eaids.analytics.injuryrisk.dto.InjuryRiskResponse;
+import com.feadev.eaids.analytics.injuryrisk.enrichment.MedicalRiskEnricher;
+import com.feadev.eaids.analytics.injuryrisk.enrichment.MedicalRiskSnapshot;
+import com.feadev.eaids.analytics.injuryrisk.enrichment.OverallRiskLevelResolver;
 import com.feadev.eaids.analytics.injuryrisk.event.InjuryRiskAssessedEvent;
 import com.feadev.eaids.analytics.injuryrisk.model.InjuryRiskAssessment;
 import com.feadev.eaids.analytics.injuryrisk.model.enums.RiskLevel;
@@ -40,6 +45,8 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
     private final AthleteScoreRepository athleteScoreRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final MedicalRiskEnricher medicalRiskEnricher;
+    private final OverallRiskLevelResolver overallRiskLevelResolver;
 
     private static final BigDecimal ACWR_DANGER_THRESHOLD = new BigDecimal("1.50");
     private static final BigDecimal PERFORMANCE_DROP_THRESHOLD = new BigDecimal("15.00");
@@ -53,16 +60,16 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
 
         UUID athleteUserId = enrollment.getUser().getId();
 
-        // Calculate risk factors
+        // Calculate training risk factors
         BigDecimal loadFactor = calculateLoadFactor(enrollmentId);
         BigDecimal attendanceFactor = calculateAttendanceFactor(enrollmentId);
         BigDecimal performanceFactor = calculatePerformanceFactor(athleteUserId, enrollmentId);
 
-        // Composite risk score (0-100)
-        int riskScore = calculateCompositeRiskScore(loadFactor, attendanceFactor, performanceFactor);
-        RiskLevel riskLevel = classifyRiskLevel(riskScore);
+        // Composite training risk score (0-100)
+        int trainingRiskScore = calculateCompositeRiskScore(loadFactor, attendanceFactor, performanceFactor);
+        RiskLevel trainingRiskLevel = classifyRiskLevel(trainingRiskScore);
 
-        // Generate recommendations
+        // Generate training recommendations
         List<String> recommendations = generateRecommendations(loadFactor, attendanceFactor, performanceFactor);
 
         String recommendationsJson;
@@ -75,8 +82,8 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
         InjuryRiskAssessment assessment = InjuryRiskAssessment.builder()
                 .athleteUserId(athleteUserId)
                 .enrollmentId(enrollmentId)
-                .riskScore(riskScore)
-                .riskLevel(riskLevel)
+                .riskScore(trainingRiskScore)
+                .riskLevel(trainingRiskLevel)
                 .loadFactorScore(loadFactor)
                 .attendanceFactorScore(attendanceFactor)
                 .performanceFactorScore(performanceFactor)
@@ -86,14 +93,20 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
 
         InjuryRiskAssessment saved = injuryRiskRepository.save(assessment);
 
+        // Enrich with medical history data (computed on-the-fly, not persisted)
+        MedicalRiskSnapshot medicalSnapshot = medicalRiskEnricher.enrich(athleteUserId);
+        RiskLevel overallRiskLevel = overallRiskLevelResolver.resolve(trainingRiskLevel, medicalSnapshot);
+
         // Publish event
         eventPublisher.publishEvent(new InjuryRiskAssessedEvent(
-                enrollmentId, athleteUserId, riskLevel, riskScore));
+                enrollmentId, athleteUserId, trainingRiskLevel, trainingRiskScore));
 
-        log.info("Injury risk assessed: enrollmentId={}, riskScore={}, riskLevel={}",
-                enrollmentId, riskScore, riskLevel);
+        log.info("Injury risk assessed: enrollmentId={}, trainingRiskScore={}, trainingRiskLevel={}, " +
+                 "medicalRiskScore={}, medicalRiskLevel={}, overallRiskLevel={}",
+                enrollmentId, trainingRiskScore, trainingRiskLevel,
+                medicalSnapshot.medicalRiskScore(), medicalSnapshot.medicalRiskLevel(), overallRiskLevel);
 
-        return mapToResponse(saved, recommendations);
+        return mapToResponse(saved, recommendations, medicalSnapshot, overallRiskLevel);
     }
 
     @Override
@@ -114,6 +127,56 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public HolisticRiskResponse getAthleteFullRiskProfile(UUID athleteUserId) {
+        // Fetch the most recent training assessment if one exists
+        List<InjuryRiskAssessment> assessments =
+                injuryRiskRepository.findByAthleteUserIdOrderByAssessedAtDesc(athleteUserId);
+        InjuryRiskAssessment latest = assessments.isEmpty() ? null : assessments.get(0);
+
+        int trainingRiskScore       = latest != null ? latest.getRiskScore()             : 0;
+        RiskLevel trainingRiskLevel = latest != null ? latest.getRiskLevel()             : RiskLevel.LOW;
+        BigDecimal loadFactor       = latest != null ? latest.getLoadFactorScore()       : BigDecimal.ZERO;
+        BigDecimal attendanceFactor = latest != null ? latest.getAttendanceFactorScore() : BigDecimal.ZERO;
+        BigDecimal performanceFactor= latest != null ? latest.getPerformanceFactorScore(): BigDecimal.ZERO;
+        LocalDateTime assessedAt    = latest != null ? latest.getAssessedAt()            : LocalDateTime.now();
+
+        // Deserialise recommendations JSON from the stored assessment
+        List<String> recommendations = List.of();
+        if (latest != null && latest.getRecommendations() != null) {
+            try {
+                recommendations = objectMapper.readValue(
+                        latest.getRecommendations(), new TypeReference<List<String>>() {});
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to parse recommendations JSON for athlete {}", athleteUserId);
+            }
+        }
+
+        MedicalRiskSnapshot medicalSnapshot = medicalRiskEnricher.enrich(athleteUserId);
+        RiskLevel overallRiskLevel = overallRiskLevelResolver.resolve(trainingRiskLevel, medicalSnapshot);
+
+        return HolisticRiskResponse.builder()
+                .athleteUserId(athleteUserId)
+                .trainingRiskScore(trainingRiskScore)
+                .trainingRiskLevel(trainingRiskLevel)
+                .loadFactorScore(loadFactor)
+                .attendanceFactorScore(attendanceFactor)
+                .performanceFactorScore(performanceFactor)
+                .medicalRiskScore(medicalSnapshot.medicalRiskScore())
+                .medicalRiskLevel(medicalSnapshot.medicalRiskLevel())
+                .medicalFlags(medicalSnapshot.medicalFlags())
+                .medicalSummary(medicalSnapshot.medicalSummary())
+                .overallRiskLevel(overallRiskLevel)
+                .recommendations(recommendations)
+                .assessedAt(assessedAt)
+                .build();
+    }
+
+    // -----------------------------------------------------------------------
+    // Training factor calculations (unchanged from original)
+    // -----------------------------------------------------------------------
+
     /**
      * Calculate load factor using Acute:Chronic Workload Ratio (ACWR).
      * Acute = current week load. Chronic = 4-week rolling average.
@@ -129,32 +192,26 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
                         enrollmentId, fourWeeksAgo, now);
 
         if (recentRecords.isEmpty()) {
-            // No explicit training load data — return neutral factor
             return new BigDecimal("20.00");
         }
 
-        // Calculate acute load (last 7 days)
         BigDecimal acuteLoad = recentRecords.stream()
                 .filter(r -> r.getSessionDate().isAfter(oneWeekAgo))
                 .map(this::calculateSessionLoad)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Calculate chronic load (4-week average per week)
         BigDecimal chronicLoad = recentRecords.stream()
                 .map(this::calculateSessionLoad)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(new BigDecimal("4"), 2, RoundingMode.HALF_UP);
 
-        // ACWR
         BigDecimal acwr = BigDecimal.ZERO;
         if (chronicLoad.compareTo(BigDecimal.ZERO) > 0) {
             acwr = acuteLoad.divide(chronicLoad, 2, RoundingMode.HALF_UP);
         }
 
-        // Check consecutive high-intensity days
         int consecutiveHigh = countConsecutiveHighIntensityDays(recentRecords);
 
-        // Score: 0 (no risk) to 100 (max risk)
         BigDecimal loadRisk = BigDecimal.ZERO;
 
         if (acwr.compareTo(ACWR_DANGER_THRESHOLD) >= 0) {
@@ -185,20 +242,17 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
                         enrollmentId, twoWeeksAgo, now);
 
         if (records.isEmpty()) {
-            return new BigDecimal("10.00"); // Low risk if no data
+            return new BigDecimal("10.00");
         }
 
-        // Sessions per week in last 2 weeks
         double sessionsPerWeek = records.size() / 2.0;
 
-        // Check if any recovery sessions exist
         long recoverySessions = records.stream()
                 .filter(r -> r.getSessionType() == com.feadev.eaids.trainingload.model.enums.TrainingSessionType.RECOVERY)
                 .count();
 
         BigDecimal attendanceRisk = BigDecimal.ZERO;
 
-        // More than 6 sessions/week without recovery = elevated
         if (sessionsPerWeek > 6 && recoverySessions == 0) {
             attendanceRisk = new BigDecimal("60.00");
         } else if (sessionsPerWeek > 5) {
@@ -215,14 +269,12 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
      * compared to previous camp, it could indicate overtraining.
      */
     private BigDecimal calculatePerformanceFactor(UUID athleteUserId, UUID currentEnrollmentId) {
-        // Get all enrollments for this athlete
         List<CampEnrollment> enrollments = campEnrollmentRepository.findByUserId(athleteUserId);
 
         if (enrollments.size() < 2) {
-            return new BigDecimal("10.00"); // Not enough data
+            return new BigDecimal("10.00");
         }
 
-        // Get scores sorted by date
         List<AthleteScore> scores = enrollments.stream()
                 .map(e -> athleteScoreRepository.findByEnrollmentId(e.getId()))
                 .filter(Optional::isPresent)
@@ -235,15 +287,14 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
         }
 
         AthleteScore previous = scores.get(scores.size() - 2);
-        AthleteScore latest = scores.get(scores.size() - 1);
+        AthleteScore latestScore = scores.get(scores.size() - 1);
 
-        if (previous.getTotalWeightedScore() == null || latest.getTotalWeightedScore() == null
+        if (previous.getTotalWeightedScore() == null || latestScore.getTotalWeightedScore() == null
                 || previous.getTotalWeightedScore().compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal("10.00");
         }
 
-        // Calculate percentage drop
-        BigDecimal drop = previous.getTotalWeightedScore().subtract(latest.getTotalWeightedScore())
+        BigDecimal drop = previous.getTotalWeightedScore().subtract(latestScore.getTotalWeightedScore())
                 .divide(previous.getTotalWeightedScore(), 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
 
@@ -259,18 +310,16 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
     }
 
     private BigDecimal calculateSessionLoad(TrainingLoadRecord record) {
-        // Load = duration × intensity multiplier
         BigDecimal intensityMultiplier = switch (record.getIntensity()) {
-            case LOW -> new BigDecimal("1.0");
-            case MEDIUM -> new BigDecimal("2.0");
-            case HIGH -> new BigDecimal("3.0");
+            case LOW      -> new BigDecimal("1.0");
+            case MEDIUM   -> new BigDecimal("2.0");
+            case HIGH     -> new BigDecimal("3.0");
             case VERY_HIGH -> new BigDecimal("4.0");
         };
         return new BigDecimal(record.getDurationMinutes()).multiply(intensityMultiplier);
     }
 
     private int countConsecutiveHighIntensityDays(List<TrainingLoadRecord> records) {
-        // Sort by date ascending
         List<TrainingLoadRecord> sorted = records.stream()
                 .sorted(Comparator.comparing(TrainingLoadRecord::getSessionDate))
                 .toList();
@@ -299,7 +348,6 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
 
     private int calculateCompositeRiskScore(BigDecimal loadFactor, BigDecimal attendanceFactor,
                                              BigDecimal performanceFactor) {
-        // Weighted: load 50%, attendance 25%, performance 25%
         BigDecimal composite = loadFactor.multiply(new BigDecimal("0.50"))
                 .add(attendanceFactor.multiply(new BigDecimal("0.25")))
                 .add(performanceFactor.multiply(new BigDecimal("0.25")));
@@ -342,7 +390,10 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
         return recommendations;
     }
 
-    private InjuryRiskResponse mapToResponse(InjuryRiskAssessment assessment, List<String> recommendations) {
+    private InjuryRiskResponse mapToResponse(InjuryRiskAssessment assessment,
+                                              List<String> recommendations,
+                                              MedicalRiskSnapshot medicalSnapshot,
+                                              RiskLevel overallRiskLevel) {
         return InjuryRiskResponse.builder()
                 .id(assessment.getId())
                 .athleteUserId(assessment.getAthleteUserId())
@@ -354,6 +405,11 @@ public class InjuryRiskServiceImpl implements InjuryRiskService {
                 .performanceFactorScore(assessment.getPerformanceFactorScore())
                 .recommendations(recommendations)
                 .assessedAt(assessment.getAssessedAt())
+                .medicalRiskScore(medicalSnapshot.medicalRiskScore())
+                .medicalRiskLevel(medicalSnapshot.medicalRiskLevel())
+                .medicalFlags(medicalSnapshot.medicalFlags())
+                .medicalSummary(medicalSnapshot.medicalSummary())
+                .overallRiskLevel(overallRiskLevel)
                 .build();
     }
 }

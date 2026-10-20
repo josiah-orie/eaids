@@ -38,6 +38,8 @@ import com.feadev.eaids.evaluation.model.CampEvaluator;
 import com.feadev.eaids.evaluation.model.CoachEvaluation;
 import com.feadev.eaids.evaluation.repository.CampEvaluatorRepository;
 import com.feadev.eaids.evaluation.repository.CoachEvaluationRepository;
+import com.feadev.eaids.league.model.LeagueStatEntry;
+import com.feadev.eaids.league.repository.LeagueStatEntryRepository;
 import com.feadev.eaids.matchstats.model.MatchStatDefinition;
 import com.feadev.eaids.matchstats.model.MatchStatEntry;
 import com.feadev.eaids.matchstats.model.enums.PositionGroup;
@@ -109,6 +111,14 @@ import com.feadev.eaids.event.repository.EventRepository;
 import com.feadev.eaids.videolibrary.model.VideoLibraryItem;
 import com.feadev.eaids.videolibrary.model.enums.VideoCategory;
 import com.feadev.eaids.videolibrary.repository.VideoLibraryRepository;
+import com.feadev.eaids.league.model.*;
+import com.feadev.eaids.league.model.enums.*;
+import com.feadev.eaids.league.repository.*;
+import com.feadev.eaids.commentary.model.MatchCommentaryEvent;
+import com.feadev.eaids.commentary.model.enums.GameEventType;
+import com.feadev.eaids.commentary.repository.MatchCommentaryEventRepository;
+import com.feadev.eaids.league.model.PostGameSummary;
+import com.feadev.eaids.league.repository.PostGameSummaryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -174,6 +184,26 @@ public class DataSeeder implements CommandLineRunner {
     private final EventRepository eventRepository;
     private final EventRegistrationRepository eventRegistrationRepository;
 
+    // League & Team Management repositories
+    private final LeagueRepository leagueRepository;
+    private final LeagueDivisionRepository leagueDivisionRepository;
+    private final LeagueStaffRepository leagueStaffRepository;
+    private final TeamRepository teamRepository;
+    private final TeamPlayerRepository teamPlayerRepository;
+    private final PlayerTransferRepository playerTransferRepository;
+    private final MatchFixtureRepository matchFixtureRepository;
+    private final LeagueStatEntryRepository leagueStatEntryRepository;
+
+    // Medical module repositories
+    private final com.feadev.eaids.medical.repository.AthleteMedicalProfileRepository athleteMedicalProfileRepository;
+    private final com.feadev.eaids.medical.repository.MedicalAssessmentRepository medicalAssessmentRepository;
+    private final com.feadev.eaids.medical.repository.AthleteInjuryRepository athleteInjuryRepository;
+    private final com.feadev.eaids.medical.repository.MedicalClearanceRepository medicalClearanceRepository;
+
+    // Enhancement feature repositories (commentary, post-game, injury risk)
+    private final com.feadev.eaids.commentary.repository.MatchCommentaryEventRepository matchCommentaryEventRepository;
+    private final com.feadev.eaids.league.repository.PostGameSummaryRepository postGameSummaryRepository;
+
     private static final String SEED_PASSWORD = "Password@123";
 
     @Override
@@ -192,6 +222,9 @@ public class DataSeeder implements CommandLineRunner {
         seedPendingVerificationAthlete(encodedPassword);
         seedPendingConsentAthlete(encodedPassword);
         seedUnderReviewAthlete(encodedPassword);
+        // Enhancement feature staff users (medical officer, physiotherapist, coordinator)
+        seedMedicalOfficerUser(encodedPassword);
+        seedPhysiotherapistUser(encodedPassword);
 
         // Phase 2: Camp & Enrollment
         Camp camp = seedCamp();
@@ -257,6 +290,15 @@ public class DataSeeder implements CommandLineRunner {
 
         // Phase 16: Events
         seedEvents(athleteUser, coachUser, scoutUser);
+
+        // Phase 17: League & Team Management
+        seedLeagueData(adminUser, athleteUser, athlete2User, coachUser, scoutUser, matchStatDef);
+
+        // Phase 18: Medical History & Health Clearance
+        seedMedicalData(adminUser, athleteUser, athlete2User);
+
+        // Phase 19: Enhancement features — Commentary, Post-Game Stats, Injury Risk
+        seedEnhancementData(adminUser, athleteUser, athlete2User);
 
         log.info("Seed data insertion completed.");
     }
@@ -2007,5 +2049,1270 @@ public class DataSeeder implements CommandLineRunner {
                 .build());
 
         log.info("Seeded 3 events and 6 event registrations (including 1 guest)");
+    }
+
+    // ======================== LEAGUE & TEAM MANAGEMENT ========================
+
+    private void seedLeagueData(User adminUser, User athleteUser, User athlete2User,
+                                User coachUser, User scoutUser,
+                                MatchStatDefinition passingYardsDef) {
+        if (leagueRepository.count() > 0) {
+            log.info("League data already exists, skipping.");
+            return;
+        }
+
+        // ── 1. Leagues ──────────────────────────────────────────────────────
+
+        League nigeriaLeague = leagueRepository.save(League.builder()
+                .name("Nigeria Flag Football League")
+                .description("Premier flag football competition for the 2026 season, open to all regions.")
+                .seasonYear(2026)
+                .country("Nigeria")
+                .region("West Africa")
+                .status(LeagueStatus.ACTIVE)
+                .build());
+
+        League westAfricaLeague = leagueRepository.save(League.builder()
+                .name("West Africa Tackle League")
+                .description("International tackle football league covering West African nations.")
+                .seasonYear(2026)
+                .country(null)
+                .region("West Africa")
+                .status(LeagueStatus.DRAFT)
+                .build());
+
+        log.info("Seeded 2 leagues");
+
+        // ── 2. Divisions ─────────────────────────────────────────────────────
+
+        LeagueDivision divisionOne = leagueDivisionRepository.save(LeagueDivision.builder()
+                .league(nigeriaLeague)
+                .name("Division 1")
+                .tierRank(1)
+                .description("Top tier — elite clubs competing for the national title.")
+                .build());
+
+        LeagueDivision divisionTwo = leagueDivisionRepository.save(LeagueDivision.builder()
+                .league(nigeriaLeague)
+                .name("Division 2")
+                .tierRank(2)
+                .description("Second tier — developing clubs with promotion potential.")
+                .build());
+
+        log.info("Seeded 2 divisions for Nigeria Flag Football League");
+
+        // ── 3. League Staff ───────────────────────────────────────────────────
+
+        leagueStaffRepository.save(LeagueStaff.builder()
+                .league(nigeriaLeague)
+                .user(coachUser)
+                .staffRole(LeagueStaffRole.LEAGUE_COORDINATOR)
+                .notes("Lead coordinator responsible for scheduling and logistics.")
+                .assignedDate(LocalDateTime.now())
+                .build());
+
+        leagueStaffRepository.save(LeagueStaff.builder()
+                .league(nigeriaLeague)
+                .user(scoutUser)
+                .staffRole(LeagueStaffRole.STATISTICIAN)
+                .notes("Responsible for recording and publishing all match statistics.")
+                .assignedDate(LocalDateTime.now())
+                .build());
+
+        leagueStaffRepository.save(LeagueStaff.builder()
+                .league(nigeriaLeague)
+                .user(adminUser)
+                .staffRole(LeagueStaffRole.REFEREE)
+                .notes("Head referee for Division 1 fixtures.")
+                .assignedDate(LocalDateTime.now())
+                .build());
+
+        log.info("Seeded 3 league staff assignments");
+
+        // ── 4. Teams ─────────────────────────────────────────────────────────
+
+        Team lagosLions = teamRepository.save(Team.builder()
+                .name("Lagos Lions")
+                .league(nigeriaLeague)
+                .division(divisionOne)
+                .homeVenue("Onikan Stadium, Lagos")
+                .country("Nigeria")
+                .state("Lagos")
+                .status(TeamStatus.ACTIVE)
+                .build());
+
+        Team abujaEagles = teamRepository.save(Team.builder()
+                .name("Abuja Eagles")
+                .league(nigeriaLeague)
+                .division(divisionOne)
+                .homeVenue("National Stadium, Abuja")
+                .country("Nigeria")
+                .state("FCT")
+                .status(TeamStatus.ACTIVE)
+                .build());
+
+        Team portHarcourtPirates = teamRepository.save(Team.builder()
+                .name("Port Harcourt Pirates")
+                .league(nigeriaLeague)
+                .division(divisionTwo)
+                .homeVenue("Sharks Stadium, Port Harcourt")
+                .country("Nigeria")
+                .state("Rivers")
+                .status(TeamStatus.ACTIVE)
+                .build());
+
+        log.info("Seeded 3 teams");
+
+        // ── 5. Team Players (Roster) ──────────────────────────────────────────
+
+        TeamPlayer player1 = teamPlayerRepository.save(TeamPlayer.builder()
+                .team(lagosLions)
+                .athlete(athleteUser)
+                .jerseyNumber(12)
+                .position(FootballPosition.QUARTERBACK)
+                .status(PlayerStatus.ACTIVE)
+                .draftedDate(LocalDate.of(2026, 4, 1))
+                .build());
+
+        TeamPlayer player2 = teamPlayerRepository.save(TeamPlayer.builder()
+                .team(abujaEagles)
+                .athlete(athlete2User)
+                .jerseyNumber(80)
+                .position(FootballPosition.WIDE_RECEIVER)
+                .status(PlayerStatus.ACTIVE)
+                .draftedDate(LocalDate.of(2026, 4, 1))
+                .build());
+
+        log.info("Seeded 2 team players");
+
+        // ── 6. Player Transfer History ────────────────────────────────────────
+
+        // Initial draft record for player1
+        playerTransferRepository.save(PlayerTransfer.builder()
+                .athleteUserId(athleteUser.getId())
+                .fromTeam(null)
+                .toTeam(lagosLions)
+                .transferType(TransferType.DRAFT)
+                .transferDate(LocalDate.of(2026, 4, 1))
+                .notes("Drafted to Lagos Lions as starting quarterback.")
+                .build());
+
+        // Initial draft record for player2
+        playerTransferRepository.save(PlayerTransfer.builder()
+                .athleteUserId(athlete2User.getId())
+                .fromTeam(null)
+                .toTeam(abujaEagles)
+                .transferType(TransferType.DRAFT)
+                .transferDate(LocalDate.of(2026, 4, 1))
+                .notes("Drafted to Abuja Eagles as wide receiver.")
+                .build());
+
+        log.info("Seeded 2 player transfer records (DRAFT)");
+
+        // ── 7. Match Fixtures ─────────────────────────────────────────────────
+
+        // Division 1 — upcoming fixture (SCHEDULED)
+        MatchFixture scheduledFixture = matchFixtureRepository.save(MatchFixture.builder()
+                .league(nigeriaLeague)
+                .division(divisionOne)
+                .homeTeam(lagosLions)
+                .awayTeam(abujaEagles)
+                .scheduledDate(LocalDateTime.of(2026, 10, 5, 15, 0))
+                .venue("Onikan Stadium, Lagos")
+                .status(FixtureStatus.SCHEDULED)
+                .refereeUserId(adminUser.getId())
+                .notes("Opening day fixture — Division 1.")
+                .build());
+
+        // Division 2 — completed: Port Harcourt Pirates 28, Lagos Lions 21
+        MatchFixture completedFixture = matchFixtureRepository.save(MatchFixture.builder()
+                .league(nigeriaLeague)
+                .division(divisionTwo)
+                .homeTeam(portHarcourtPirates)
+                .awayTeam(lagosLions)
+                .scheduledDate(LocalDateTime.of(2026, 9, 20, 14, 0))
+                .venue("Sharks Stadium, Port Harcourt")
+                .status(FixtureStatus.COMPLETED)
+                .homeScore(28)
+                .awayScore(21)
+                .refereeUserId(adminUser.getId())
+                .notes("Port Harcourt won in a close game.")
+                .build());
+
+        // Division 1 — postponed
+        MatchFixture postponedFixture = matchFixtureRepository.save(MatchFixture.builder()
+                .league(nigeriaLeague)
+                .division(divisionOne)
+                .homeTeam(abujaEagles)
+                .awayTeam(portHarcourtPirates)
+                .scheduledDate(LocalDateTime.of(2026, 10, 12, 16, 0))
+                .venue("National Stadium, Abuja")
+                .status(FixtureStatus.POSTPONED)
+                .notes("Postponed due to venue unavailability.")
+                .build());
+
+        // Division 1 — completed: Lagos Lions 35, Abuja Eagles 14 (matchday 2)
+        MatchFixture div1Fixture1 = matchFixtureRepository.save(MatchFixture.builder()
+                .league(nigeriaLeague)
+                .division(divisionOne)
+                .homeTeam(lagosLions)
+                .awayTeam(abujaEagles)
+                .scheduledDate(LocalDateTime.of(2026, 9, 7, 15, 0))
+                .venue("Onikan Stadium, Lagos")
+                .status(FixtureStatus.COMPLETED)
+                .homeScore(35)
+                .awayScore(14)
+                .refereeUserId(adminUser.getId())
+                .notes("Lagos Lions dominant win — Division 1 matchday 2.")
+                .build());
+
+        // Division 1 — completed: Abuja Eagles 28, Lagos Lions 21 (matchday 3)
+        MatchFixture div1Fixture2 = matchFixtureRepository.save(MatchFixture.builder()
+                .league(nigeriaLeague)
+                .division(divisionOne)
+                .homeTeam(abujaEagles)
+                .awayTeam(lagosLions)
+                .scheduledDate(LocalDateTime.of(2026, 9, 14, 15, 0))
+                .venue("National Stadium, Abuja")
+                .status(FixtureStatus.COMPLETED)
+                .homeScore(28)
+                .awayScore(21)
+                .refereeUserId(adminUser.getId())
+                .notes("Abuja Eagles level the series — Division 1 matchday 3.")
+                .build());
+
+        // Division 2 — completed: Lagos Lions 42, Port Harcourt Pirates 7 (matchday 3)
+        MatchFixture div2Fixture2 = matchFixtureRepository.save(MatchFixture.builder()
+                .league(nigeriaLeague)
+                .division(divisionTwo)
+                .homeTeam(lagosLions)
+                .awayTeam(portHarcourtPirates)
+                .scheduledDate(LocalDateTime.of(2026, 9, 28, 14, 0))
+                .venue("Onikan Stadium, Lagos")
+                .status(FixtureStatus.COMPLETED)
+                .homeScore(42)
+                .awayScore(7)
+                .refereeUserId(adminUser.getId())
+                .notes("Lagos Lions dominant win in Division 2 rematch.")
+                .build());
+
+        log.info("Seeded 6 match fixtures (3 completed, 1 scheduled, 1 postponed, 1 completed-div2)");
+
+        // ── 8. Additional roster players for stat coverage ────────────────────
+
+        // Lagos Lions — Running Back
+        TeamPlayer lionsRB = teamPlayerRepository.save(TeamPlayer.builder()
+                .team(lagosLions)
+                .athlete(coachUser)          // reuse seeded user — distinct athlete not strictly needed for stats
+                .jerseyNumber(22)
+                .position(FootballPosition.RUNNING_BACK)
+                .status(PlayerStatus.ACTIVE)
+                .draftedDate(LocalDate.of(2026, 4, 1))
+                .build());
+
+        // Abuja Eagles — Quarterback
+        TeamPlayer eaglesQB = teamPlayerRepository.save(TeamPlayer.builder()
+                .team(abujaEagles)
+                .athlete(scoutUser)
+                .jerseyNumber(7)
+                .position(FootballPosition.QUARTERBACK)
+                .status(PlayerStatus.ACTIVE)
+                .draftedDate(LocalDate.of(2026, 4, 1))
+                .build());
+
+        // Port Harcourt Pirates — Quarterback
+        TeamPlayer piratesQB = teamPlayerRepository.save(TeamPlayer.builder()
+                .team(portHarcourtPirates)
+                .athlete(adminUser)
+                .jerseyNumber(1)
+                .position(FootballPosition.QUARTERBACK)
+                .status(PlayerStatus.ACTIVE)
+                .draftedDate(LocalDate.of(2026, 4, 1))
+                .build());
+
+        log.info("Seeded 3 additional roster players (RB, QB, QB)");
+
+        // ── 9. Stat definitions lookup ────────────────────────────────────────
+
+        // Find the stat definitions we need — they were seeded in Phase 5 by MatchStatDefinitionSeeder
+        MatchStatDefinition rushingYardsDef = matchStatDefinitionRepository
+                .findByIsActiveTrue()
+                .stream()
+                .filter(d -> "Rushing Yards".equalsIgnoreCase(d.getStatName()))
+                .findFirst()
+                .orElse(null);
+
+        MatchStatDefinition receivingYardsDef = matchStatDefinitionRepository
+                .findByIsActiveTrue()
+                .stream()
+                .filter(d -> "Receiving Yards".equalsIgnoreCase(d.getStatName()))
+                .findFirst()
+                .orElse(null);
+
+        MatchStatDefinition tacklesDef = matchStatDefinitionRepository
+                .findByIsActiveTrue()
+                .stream()
+                .filter(d -> "Tackles".equalsIgnoreCase(d.getStatName()))
+                .findFirst()
+                .orElse(null);
+
+        // player1 = Lagos Lions QB #12 (athleteUser)
+        // player2 = Abuja Eagles WR #80 (athlete2User)
+        // lionsRB = Lagos Lions RB #22
+        // eaglesQB = Abuja Eagles QB #7
+        // piratesQB = Port Harcourt Pirates QB #1
+
+        // ── 10. LeagueStatEntry records ───────────────────────────────────────
+        //
+        // Division 1 completed fixtures: div1Fixture1 (Lions 35–14 Eagles) + div1Fixture2 (Eagles 28–21 Lions)
+        // Division 2 completed fixtures: completedFixture (Pirates 28–21 Lions) + div2Fixture2 (Lions 42–7 Pirates)
+
+        List<LeagueStatEntry> leagueStats = new java.util.ArrayList<>();
+
+        // --- div1Fixture1: Lagos Lions 35, Abuja Eagles 14 ---
+        if (passingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player1)         // Lions QB
+                    .fixture(div1Fixture1)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("285.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(eaglesQB)        // Eagles QB
+                    .fixture(div1Fixture1)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("142.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (rushingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(lionsRB)         // Lions RB
+                    .fixture(div1Fixture1)
+                    .definition(rushingYardsDef)
+                    .value(new BigDecimal("110.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (receivingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player2)         // Eagles WR
+                    .fixture(div1Fixture1)
+                    .definition(receivingYardsDef)
+                    .value(new BigDecimal("88.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (tacklesDef != null) {
+            // A Lions linebacker would be ideal; reuse piratesQB user as a stand-in defender for demo
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(lionsRB)         // using RB slot — tackles would normally be a defender
+                    .fixture(div1Fixture1)
+                    .definition(tacklesDef)
+                    .value(new BigDecimal("5.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+
+        // --- div1Fixture2: Abuja Eagles 28, Lagos Lions 21 ---
+        if (passingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(eaglesQB)        // Eagles QB
+                    .fixture(div1Fixture2)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("310.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player1)         // Lions QB
+                    .fixture(div1Fixture2)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("198.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (rushingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(lionsRB)         // Lions RB
+                    .fixture(div1Fixture2)
+                    .definition(rushingYardsDef)
+                    .value(new BigDecimal("87.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (receivingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player2)         // Eagles WR
+                    .fixture(div1Fixture2)
+                    .definition(receivingYardsDef)
+                    .value(new BigDecimal("132.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+
+        // --- completedFixture: Port Harcourt Pirates 28, Lagos Lions 21 (Div 2) ---
+        if (passingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(piratesQB)       // Pirates QB
+                    .fixture(completedFixture)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("240.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player1)         // Lions QB
+                    .fixture(completedFixture)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("175.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (rushingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(lionsRB)         // Lions RB
+                    .fixture(completedFixture)
+                    .definition(rushingYardsDef)
+                    .value(new BigDecimal("95.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+
+        // --- div2Fixture2: Lagos Lions 42, Port Harcourt Pirates 7 (Div 2) ---
+        if (passingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player1)         // Lions QB
+                    .fixture(div2Fixture2)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("320.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(piratesQB)       // Pirates QB
+                    .fixture(div2Fixture2)
+                    .definition(passingYardsDef)
+                    .value(new BigDecimal("88.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (rushingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(lionsRB)         // Lions RB
+                    .fixture(div2Fixture2)
+                    .definition(rushingYardsDef)
+                    .value(new BigDecimal("145.00"))
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+        if (receivingYardsDef != null) {
+            leagueStats.add(LeagueStatEntry.builder()
+                    .teamPlayer(player2)         // Eagles WR (appears in div2 via cross-league stats lookup)
+                    .fixture(div2Fixture2)
+                    .definition(receivingYardsDef)
+                    .value(new BigDecimal("0.00"))   // Eagles not in this fixture — omit meaningful value
+                    .recordedBy(adminUser.getId())
+                    .build());
+        }
+
+        leagueStatEntryRepository.saveAll(leagueStats);
+        log.info("Seeded {} league stat entries across 4 completed fixtures", leagueStats.size());
+
+        log.info("League & Team Management seed data complete: 2 leagues, 2 divisions, 3 staff, " +
+                 "3 teams, 5 players, 2 transfer records, 6 fixtures, {} league stat entries",
+                 leagueStats.size());
+    }
+
+    // ======================== MEDICAL HISTORY & HEALTH CLEARANCE ========================
+
+    private void seedMedicalData(User adminUser, User athleteUser, User athlete2User) {
+        if (athleteMedicalProfileRepository.count() > 0) {
+            log.info("Medical seed data already exists, skipping.");
+            return;
+        }
+
+        // ── 1. Medical Profiles ─────────────────────────────────────────────
+
+        // Athlete 1 (QB, Lagos Lions) — completed questionnaire, no major conditions
+        com.feadev.eaids.medical.model.AthleteMedicalProfile profile1 =
+                athleteMedicalProfileRepository.save(
+                        com.feadev.eaids.medical.model.AthleteMedicalProfile.builder()
+                                .athleteUserId(athleteUser.getId())
+                                .bloodType("O+")
+                                .existingConditions("None known")
+                                .pastIllnesses("Mild asthma in childhood — resolved, no current medication required")
+                                .previousSurgeries("None")
+                                .hospitalAdmissions("None")
+                                .knownAllergies("None")
+                                .currentMedications("None")
+                                .familyCardiacHistory(false)
+                                .exerciseSymptoms("None")
+                                .visionHearingNotes("20/20 vision (corrected). No hearing concerns.")
+                                .musculoskeletalNotes("Previous right knee sprain (2024) — fully resolved")
+                                .emergencyContactName("Funke Okafor")
+                                .emergencyContactPhone("+2348055551234")
+                                .emergencyContactRelation("Mother")
+                                .questionnaireCompleted(true)
+                                .reviewedByMedicalOfficer(true)
+                                .submittedBy(athleteUser.getId())
+                                .submittedDate(LocalDateTime.of(2026, 8, 1, 9, 0))
+                                .lastReviewedDate(LocalDateTime.of(2026, 8, 5, 11, 0))
+                                .build());
+
+        // Athlete 2 (WR, Abuja Eagles) — completed questionnaire, known allergy and cardiac family history
+        com.feadev.eaids.medical.model.AthleteMedicalProfile profile2 =
+                athleteMedicalProfileRepository.save(
+                        com.feadev.eaids.medical.model.AthleteMedicalProfile.builder()
+                                .athleteUserId(athlete2User.getId())
+                                .bloodType("B+")
+                                .existingConditions("Mild exercise-induced bronchoconstriction — managed with Ventolin PRN")
+                                .pastIllnesses("Malaria (2023). Typhoid (2022).")
+                                .previousSurgeries("None")
+                                .hospitalAdmissions("None")
+                                .knownAllergies("Penicillin — causes urticaria and facial swelling. Documented since 2021.")
+                                .currentMedications("Salbutamol inhaler (Ventolin) — as needed before intense exercise")
+                                .familyCardiacHistory(true)
+                                .exerciseSymptoms(
+                                        "Occasional mild wheeze at very high intensity — controlled with inhaler. " +
+                                        "No chest pain, no syncope, no palpitations.")
+                                .visionHearingNotes("Wears contact lenses for training. Left eye dominance.")
+                                .musculoskeletalNotes("No significant history")
+                                .emergencyContactName("Emeka Okonkwo")
+                                .emergencyContactPhone("+2348077775678")
+                                .emergencyContactRelation("Father")
+                                .questionnaireCompleted(true)
+                                .reviewedByMedicalOfficer(false)
+                                .submittedBy(athlete2User.getId())
+                                .submittedDate(LocalDateTime.of(2026, 8, 2, 10, 0))
+                                .outstandingClarifications(
+                                        "Family cardiac history requires clarification — specify affected relative " +
+                                        "and nature of condition before assessment can be finalised.")
+                                .build());
+
+        log.info("Seeded 2 athlete medical profiles");
+
+        // ── 2. Medical Assessments ──────────────────────────────────────────
+
+        // Athlete 1 — finalised pre-participation assessment (admin acts as MO for seed)
+        com.feadev.eaids.medical.model.MedicalAssessment assessment1 =
+                medicalAssessmentRepository.save(
+                        com.feadev.eaids.medical.model.MedicalAssessment.builder()
+                                .athleteUserId(athleteUser.getId())
+                                .assessmentType(
+                                        com.feadev.eaids.medical.model.enums.AssessmentType
+                                                .INITIAL_PRE_PARTICIPATION.name())
+                                .assessmentDate(LocalDateTime.of(2026, 8, 5, 10, 0))
+                                .clinicianUserId(adminUser.getId())
+                                .clinicianCredentials("MBBS, MSc Sports Medicine")
+                                .bloodPressureSystolic(118)
+                                .bloodPressureDiastolic(76)
+                                .pulseBpm(62)
+                                .cardiovascularFindings(
+                                        "Regular rate and rhythm. No murmurs, gallops, or rubs. " +
+                                        "No signs of cardiomegaly.")
+                                .respiratoryFindings(
+                                        "Clear breath sounds bilaterally. No wheeze or crackles. " +
+                                        "History of childhood asthma — no current symptoms or medications.")
+                                .neurologicalFindings(
+                                        "Cranial nerves II–XII intact. No focal neurological deficit.")
+                                .musculoskeletalFindings(
+                                        "Full range of motion in all major joints. Right knee fully rehabilitated. " +
+                                        "No tenderness, instability, or effusion detected.")
+                                .investigationsResults(
+                                        "ECG: Normal sinus rhythm, no ST changes. " +
+                                        "Full blood count: Within normal limits.")
+                                .clinicalFindings(
+                                        "No contraindications to full participation identified. " +
+                                        "Previous right knee sprain fully resolved with no functional limitation.")
+                                .recommendations(
+                                        "Athlete is fit for all training and competitive activities. " +
+                                        "Annual review recommended. Continue monitoring for any recurrence " +
+                                        "of knee symptoms.")
+                                .participationRestrictions("None")
+                                .referralsRequired("None")
+                                .followUpDate(LocalDate.of(2027, 8, 5))
+                                .status(com.feadev.eaids.medical.model.enums.AssessmentStatus
+                                        .FINALISED.name())
+                                .finalisedAt(LocalDateTime.of(2026, 8, 5, 11, 30))
+                                .build());
+
+        // Athlete 2 — assessment in UNDER_REVIEW (cardiac family history outstanding)
+        com.feadev.eaids.medical.model.MedicalAssessment assessment2 =
+                medicalAssessmentRepository.save(
+                        com.feadev.eaids.medical.model.MedicalAssessment.builder()
+                                .athleteUserId(athlete2User.getId())
+                                .assessmentType(
+                                        com.feadev.eaids.medical.model.enums.AssessmentType
+                                                .INITIAL_PRE_PARTICIPATION.name())
+                                .assessmentDate(LocalDateTime.of(2026, 8, 6, 14, 0))
+                                .clinicianUserId(adminUser.getId())
+                                .clinicianCredentials("MBBS, MSc Sports Medicine")
+                                .bloodPressureSystolic(122)
+                                .bloodPressureDiastolic(78)
+                                .pulseBpm(68)
+                                .cardiovascularFindings(
+                                        "Regular rate and rhythm. No audible murmurs. " +
+                                        "Family cardiac history noted — further clarification pending.")
+                                .respiratoryFindings(
+                                        "Mild expiratory wheeze noted at rest. Responds to Ventolin. " +
+                                        "Exercise-induced bronchoconstriction documented — managed.")
+                                .neurologicalFindings("No abnormality detected.")
+                                .musculoskeletalFindings("No abnormality detected.")
+                                .investigationsResults(
+                                        "ECG: Normal sinus rhythm. " +
+                                        "Spirometry: FEV1/FVC 0.74 — mildly reduced, consistent with " +
+                                        "mild obstructive pattern.")
+                                .clinicalFindings(
+                                        "Athlete has known penicillin allergy — documented in emergency record. " +
+                                        "Exercise-induced bronchoconstriction well-controlled with Ventolin PRN. " +
+                                        "Family cardiac history requires clarification before full clearance.")
+                                .recommendations(
+                                        "Conditional training clearance pending cardiology review of family history. " +
+                                        "Ventolin inhaler must be available at all training sessions and matches. " +
+                                        "Medical team must be informed of penicillin allergy at every event.")
+                                .participationRestrictions(
+                                        "Light non-contact training only pending cardiac review outcome. " +
+                                        "Ventolin inhaler required at all sessions.")
+                                .referralsRequired(
+                                        "Cardiology referral for family history risk stratification. " +
+                                        "Athlete to bring family member medical records to next appointment.")
+                                .followUpDate(LocalDate.of(2026, 9, 6))
+                                .status(com.feadev.eaids.medical.model.enums.AssessmentStatus
+                                        .UNDER_REVIEW.name())
+                                .build());
+
+        log.info("Seeded 2 medical assessments (1 FINALISED, 1 UNDER_REVIEW)");
+
+        // ── 3. Injuries ─────────────────────────────────────────────────────
+
+        // Athlete 1 — resolved knee sprain (historical, CLOSED)
+        com.feadev.eaids.medical.model.AthleteInjury injury1 =
+                athleteInjuryRepository.save(
+                        com.feadev.eaids.medical.model.AthleteInjury.builder()
+                                .athleteUserId(athleteUser.getId())
+                                .incidentDate(LocalDateTime.of(2026, 7, 10, 14, 30))
+                                .reportedDate(LocalDateTime.of(2026, 7, 10, 15, 0))
+                                .incidentLocation("Training pitch — Onikan Stadium, Lagos")
+                                .injuryContext(
+                                        com.feadev.eaids.medical.model.enums.InjuryContext
+                                                .TRAINING.name())
+                                .bodyRegion(
+                                        com.feadev.eaids.medical.model.enums.BodyRegion
+                                                .KNEE.name())
+                                .injuryCategory(
+                                        com.feadev.eaids.medical.model.enums.InjuryCategory
+                                                .SPRAIN.name())
+                                .isSuspectedConcussion(false)
+                                .mechanismOfInjury(
+                                        "Non-contact twisting injury during cutting drill. " +
+                                        "Planted right foot while changing direction at speed.")
+                                .symptomsReported(
+                                        "Medial knee pain, swelling, and difficulty weight-bearing immediately " +
+                                        "after incident. No locking or giving way reported.")
+                                .severity("MODERATE")
+                                .confirmedDiagnosis(
+                                        "Grade II medial collateral ligament (MCL) sprain, right knee. " +
+                                        "Confirmed by clinical examination and MRI.")
+                                .initialResponse(
+                                        "RICE protocol applied immediately (Rest, Ice, Compression, Elevation). " +
+                                        "Athlete removed from training. Crutches provided.")
+                                .referralDetails(
+                                        "Referred to physiotherapy for structured rehabilitation programme. " +
+                                        "MRI ordered — completed 2026-07-12.")
+                                .treatmentPlan(
+                                        "4-week physiotherapy programme: RICE phase 1–3 days, " +
+                                        "progressive range-of-motion 4–14 days, strengthening 2–4 weeks. " +
+                                        "NSAIDs (Ibuprofen 400mg TDS) for 5 days.")
+                                .participationRestrictions(
+                                        "No training or competition for minimum 4 weeks from injury date.")
+                                .rehabilitationStatus("Completed 4-week physiotherapy programme")
+                                .returnToSportDecision(
+                                        "Cleared for return to full training and competition — " +
+                                        "2026-08-08 by Dr A. Adeyemi. Functional assessment passed.")
+                                .status(com.feadev.eaids.medical.model.enums.InjuryStatus
+                                        .CLOSED.name())
+                                .reportedBy(adminUser.getId())
+                                .recordedBy(adminUser.getId())
+                                .build());
+
+        // Athlete 2 — suspected concussion, currently AWAITING_ASSESSMENT
+        com.feadev.eaids.medical.model.AthleteInjury injury2 =
+                athleteInjuryRepository.save(
+                        com.feadev.eaids.medical.model.AthleteInjury.builder()
+                                .athleteUserId(athlete2User.getId())
+                                .incidentDate(LocalDateTime.of(2026, 9, 14, 16, 45))
+                                .reportedDate(LocalDateTime.of(2026, 9, 14, 17, 0))
+                                .incidentLocation("National Stadium, Abuja — Division 1 Match")
+                                .injuryContext(
+                                        com.feadev.eaids.medical.model.enums.InjuryContext
+                                                .COMPETITION.name())
+                                .bodyRegion(
+                                        com.feadev.eaids.medical.model.enums.BodyRegion
+                                                .HEAD_NECK.name())
+                                .injuryCategory(
+                                        com.feadev.eaids.medical.model.enums.InjuryCategory
+                                                .HEAD_INJURY.name())
+                                .isSuspectedConcussion(true)
+                                .mechanismOfInjury(
+                                        "Head-to-head collision with opponent during contested catch in " +
+                                        "the end zone. Athlete fell backwards and struck the ground.")
+                                .symptomsReported(
+                                        "Appeared dazed immediately after collision. Reported headache, " +
+                                        "mild confusion, and light sensitivity. Denied loss of consciousness " +
+                                        "but teammates noted brief unresponsiveness (~5 seconds). " +
+                                        "Nausea reported 10 minutes post-incident.")
+                                .initialResponse(
+                                        "Athlete removed from field immediately under concussion protocol. " +
+                                        "Assessed pitch-side — not cleared to return to play. " +
+                                        "Standard sideline concussion assessment performed by team official.")
+                                .status(com.feadev.eaids.medical.model.enums.InjuryStatus
+                                        .AWAITING_ASSESSMENT.name())
+                                .reportedBy(adminUser.getId())
+                                .recordedBy(adminUser.getId())
+                                .build());
+
+        log.info("Seeded 2 athlete injuries (1 CLOSED knee sprain, 1 AWAITING_ASSESSMENT suspected concussion)");
+
+        // ── 4. Medical Clearances ────────────────────────────────────────────
+
+        // Athlete 1 — CLEARED (full participation, linked to FINALISED assessment)
+        com.feadev.eaids.medical.model.MedicalClearance clearance1 =
+                medicalClearanceRepository.save(
+                        com.feadev.eaids.medical.model.MedicalClearance.builder()
+                                .athleteUserId(athleteUser.getId())
+                                .issuedBy(adminUser.getId())
+                                .relatedAssessmentId(assessment1.getId())
+                                .relatedInjuryId(injury1.getId())
+                                .activityScope("All training and competitive activities")
+                                .status(com.feadev.eaids.medical.model.enums.ClearanceStatus
+                                        .CLEARED.name())
+                                .decisionDate(LocalDateTime.of(2026, 8, 5, 12, 0))
+                                .effectiveDate(LocalDate.of(2026, 8, 6))
+                                .expiryDate(LocalDate.of(2027, 8, 5))
+                                .participationRestrictions("None")
+                                .requiredAccommodations("None")
+                                .followUpRequirements(
+                                        "Annual pre-participation assessment due by 2027-08-05.")
+                                .build());
+
+        // Athlete 2 — NOT_CLEARED (pending cardiac review and concussion assessment)
+        com.feadev.eaids.medical.model.MedicalClearance clearance2 =
+                medicalClearanceRepository.save(
+                        com.feadev.eaids.medical.model.MedicalClearance.builder()
+                                .athleteUserId(athlete2User.getId())
+                                .issuedBy(adminUser.getId())
+                                .relatedAssessmentId(assessment2.getId())
+                                .relatedInjuryId(injury2.getId())
+                                .activityScope("All training and competitive activities")
+                                .status(com.feadev.eaids.medical.model.enums.ClearanceStatus
+                                        .NOT_CLEARED.name())
+                                .decisionDate(LocalDateTime.of(2026, 9, 15, 9, 0))
+                                .participationRestrictions(
+                                        "No training or competition until concussion assessment is completed " +
+                                        "and cardiac family history is reviewed and risk-stratified. " +
+                                        "Ventolin inhaler required at all times.")
+                                .conditionalReason(
+                                        "1. Suspected concussion sustained 2026-09-14 — formal medical " +
+                                        "assessment not yet completed. Athlete must not participate until " +
+                                        "cleared by a qualified medical professional following concussion " +
+                                        "protocol. " +
+                                        "2. Cardiac family history outstanding — cardiology referral required " +
+                                        "before unrestricted participation clearance can be issued.")
+                                .followUpRequirements(
+                                        "1. Concussion protocol assessment to be completed by qualified " +
+                                        "medical officer within 48 hours. " +
+                                        "2. Cardiology appointment to be arranged. " +
+                                        "3. Updated clearance decision to follow completed assessments.")
+                                .build());
+
+        log.info("Seeded 2 medical clearances (athlete1: CLEARED, athlete2: NOT_CLEARED)");
+        log.info("Medical seed data complete: 2 profiles, 2 assessments, 2 injuries, 2 clearances");
+    }
+
+    // ======================== ENHANCEMENT FEATURE SEED USERS ========================
+
+    private void seedMedicalOfficerUser(String encodedPassword) {
+        String email = "mo@eaids.com";
+        if (userRepository.existsByEmail(email)) {
+            log.info("Medical officer user already exists, skipping.");
+            return;
+        }
+        User mo = User.builder()
+                .email(email)
+                .phoneNumber("+2348000000009")
+                .password(encodedPassword)
+                .role(UserRole.ROLE_MEDICAL_OFFICER)
+                .status(UserStatus.ACTIVE)
+                .emailVerified(true)
+                .phoneVerified(false)
+                .enabled(true)
+                .build();
+        userRepository.save(mo);
+        log.info("Seeded medical officer user: {}", email);
+    }
+
+    private void seedPhysiotherapistUser(String encodedPassword) {
+        String email = "physio@eaids.com";
+        if (userRepository.existsByEmail(email)) {
+            log.info("Physiotherapist user already exists, skipping.");
+            return;
+        }
+        User physio = User.builder()
+                .email(email)
+                .phoneNumber("+2348000000010")
+                .password(encodedPassword)
+                .role(UserRole.ROLE_PHYSIOTHERAPIST)
+                .status(UserStatus.ACTIVE)
+                .emailVerified(true)
+                .phoneVerified(false)
+                .enabled(true)
+                .build();
+        userRepository.save(physio);
+        log.info("Seeded physiotherapist user: {}", email);
+    }
+
+    // ======================== PHASE 19: COMMENTARY, POST-GAME STATS, INJURY RISK ========================
+
+    private void seedEnhancementData(User adminUser, User athleteUser, User athlete2User) {
+        if (matchCommentaryEventRepository.count() > 0) {
+            log.info("Enhancement seed data (commentary / post-game / injury risk) already exists, skipping.");
+            return;
+        }
+
+        // ── Find the IN_PROGRESS fixture and completed fixtures created in Phase 17 ──
+
+        // We need the live fixture for commentary and the completed fixtures for post-game.
+        // The IN_PROGRESS fixture is seeded here; the completed ones were created in seedLeagueData.
+        List<MatchFixture> allFixtures = matchFixtureRepository.findAll();
+        if (allFixtures.isEmpty()) {
+            log.warn("No fixtures found — skipping enhancement seed data. Run Phase 17 first.");
+            return;
+        }
+
+        // Find or create an IN_PROGRESS fixture for live commentary demo
+        MatchFixture liveFixture = allFixtures.stream()
+                .filter(f -> f.getStatus() == FixtureStatus.IN_PROGRESS)
+                .findFirst()
+                .orElseGet(() -> {
+                    // Find the SCHEDULED fixture and clone it as IN_PROGRESS for demo purposes
+                    MatchFixture scheduled = allFixtures.stream()
+                            .filter(f -> f.getStatus() == FixtureStatus.SCHEDULED)
+                            .findFirst().orElse(null);
+                    if (scheduled == null) return null;
+
+                    MatchFixture live = matchFixtureRepository.save(MatchFixture.builder()
+                            .league(scheduled.getLeague())
+                            .division(scheduled.getDivision())
+                            .homeTeam(scheduled.getHomeTeam())
+                            .awayTeam(scheduled.getAwayTeam())
+                            .scheduledDate(LocalDateTime.now().minusHours(2))
+                            .venue(scheduled.getVenue() != null ? scheduled.getVenue() : "Demo Venue")
+                            .status(FixtureStatus.IN_PROGRESS)
+                            .homeScore(14)
+                            .awayScore(7)
+                            .refereeUserId(adminUser.getId())
+                            .notes("Live demo fixture for commentary seed data.")
+                            .build());
+                    log.info("Created IN_PROGRESS demo fixture: {}", live.getId());
+                    return live;
+                });
+
+        // ── Part A: Commentary Events ─────────────────────────────────────────────────
+
+        if (liveFixture != null) {
+            seedCommentaryEvents(liveFixture, adminUser);
+        }
+
+        // ── Part B: Post-Game Summaries ───────────────────────────────────────────────
+
+        List<MatchFixture> completedFixtures = allFixtures.stream()
+                .filter(f -> f.getStatus() == FixtureStatus.COMPLETED)
+                .collect(java.util.stream.Collectors.toList());
+
+        seedPostGameSummaries(completedFixtures, adminUser);
+
+        // ── Part C: Additional injuries for meaningful risk scores ─────────────────────
+
+        seedAdditionalInjuries(adminUser, athleteUser, athlete2User);
+
+        log.info("Phase 19 (enhancement features) seed data complete.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // Commentary Events
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    private void seedCommentaryEvents(MatchFixture liveFixture, User adminUser) {
+        String actor = adminUser.getEmail();
+        LocalDateTime base = LocalDateTime.now().minusHours(2);
+
+        List<MatchCommentaryEvent> events = new java.util.ArrayList<>();
+
+        // Quarter 1 start
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.QUARTER_START)
+                .quarter(1)
+                .homeScore(0)
+                .awayScore(0)
+                .description("Quarter 1 underway! " +
+                        liveFixture.getHomeTeam().getName() + " receive the kickoff.")
+                .createdBy(actor)
+                .build());
+
+        // First score — home TD
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.SCORE_UPDATE)
+                .quarter(1)
+                .eventTimeSeconds(487)
+                .homeScore(7)
+                .awayScore(0)
+                .description("TOUCHDOWN " + liveFixture.getHomeTeam().getName() +
+                        "! #12 connects with #80 for a 42-yard strike. Extra point is good.")
+                .playerEventSubtype("TD")
+                .createdBy(actor)
+                .build());
+
+        // Play-by-play commentary
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.COMMENTARY)
+                .quarter(1)
+                .eventTimeSeconds(610)
+                .homeScore(7)
+                .awayScore(0)
+                .description("Excellent pocket presence from the quarterback — " +
+                        "stepped up and delivered under pressure.")
+                .createdBy(actor)
+                .build());
+
+        // Penalty
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.PENALTY)
+                .quarter(1)
+                .eventTimeSeconds(780)
+                .homeScore(7)
+                .awayScore(0)
+                .description("Flag on the play — holding on the offense. 10-yard penalty, " +
+                        liveFixture.getHomeTeam().getName() + " back to their own 25.")
+                .playerEventSubtype("PENALTY_FLAG")
+                .createdBy(actor)
+                .build());
+
+        // Quarter 1 end
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.QUARTER_END)
+                .quarter(1)
+                .homeScore(7)
+                .awayScore(0)
+                .description("End of Quarter 1. " + liveFixture.getHomeTeam().getName() +
+                        " lead 7-0.")
+                .createdBy(actor)
+                .build());
+
+        // Quarter 2 start
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.QUARTER_START)
+                .quarter(2)
+                .homeScore(7)
+                .awayScore(0)
+                .description("Quarter 2 kicks off.")
+                .createdBy(actor)
+                .build());
+
+        // Away TD
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.SCORE_UPDATE)
+                .quarter(2)
+                .eventTimeSeconds(1320)
+                .homeScore(7)
+                .awayScore(7)
+                .description("TOUCHDOWN " + liveFixture.getAwayTeam().getName() +
+                        "! 35-yard rushing touchdown brings them level. Extra point good. 7-7.")
+                .playerEventSubtype("TD")
+                .createdBy(actor)
+                .build());
+
+        // INT
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.PLAYER_EVENT)
+                .quarter(2)
+                .eventTimeSeconds(1620)
+                .homeScore(7)
+                .awayScore(7)
+                .description("INTERCEPTION! " + liveFixture.getHomeTeam().getName() +
+                        " defense makes a tremendous read — picks off the pass at the 30-yard line!")
+                .playerEventSubtype("INT")
+                .createdBy(actor)
+                .build());
+
+        // Second home TD — now leads 14-7
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.SCORE_UPDATE)
+                .quarter(2)
+                .eventTimeSeconds(1740)
+                .homeScore(14)
+                .awayScore(7)
+                .description("TOUCHDOWN " + liveFixture.getHomeTeam().getName() +
+                        "! Capitalise immediately off the turnover. 14-7 at halftime. Extra point good.")
+                .playerEventSubtype("TD")
+                .createdBy(actor)
+                .build());
+
+        // Halftime commentary
+        events.add(MatchCommentaryEvent.builder()
+                .fixture(liveFixture)
+                .eventType(GameEventType.QUARTER_END)
+                .quarter(2)
+                .homeScore(14)
+                .awayScore(7)
+                .description("HALFTIME: " + liveFixture.getHomeTeam().getName() + " 14 – " +
+                        liveFixture.getAwayTeam().getName() + " 7. " +
+                        "Strong defensive showing in Q2 — turnover was the difference.")
+                .createdBy(actor)
+                .build());
+
+        // Assign timestamps offset from base so ordering is deterministic
+        // (createdDate is set by @CreatedDate auditing, but we need the fixture to be
+        //  in session context — so we persist first, then trust audit)
+        matchCommentaryEventRepository.saveAll(events);
+        log.info("Seeded {} commentary events for live fixture {}", events.size(), liveFixture.getId());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // Post-Game Summaries
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    private void seedPostGameSummaries(List<MatchFixture> completedFixtures, User adminUser) {
+        if (postGameSummaryRepository.count() > 0) {
+            log.info("Post-game summaries already exist, skipping.");
+            return;
+        }
+        if (completedFixtures.isEmpty()) {
+            log.warn("No completed fixtures found — skipping post-game summary seed.");
+            return;
+        }
+
+        List<PostGameSummary> summaries = new java.util.ArrayList<>();
+
+        // Build one summary per completed fixture using the team players already in it.
+        // We only create summaries for fixtures where we have stat entries (i.e. where
+        // TeamPlayers are reachable). We compose the data manually here to mirror what
+        // PostGameStatsServiceImpl would compute, so Swagger / the API has data to show.
+        for (MatchFixture fixture : completedFixtures) {
+
+            List<com.feadev.eaids.league.model.LeagueStatEntry> entries =
+                    leagueStatEntryRepository.findByFixtureId(fixture.getId());
+            if (entries.isEmpty()) continue;
+
+            // Group entries by TeamPlayer
+            java.util.Map<UUID, java.util.List<com.feadev.eaids.league.model.LeagueStatEntry>> byPlayer =
+                    entries.stream().collect(java.util.stream.Collectors.groupingBy(
+                            e -> e.getTeamPlayer().getId()));
+
+            for (java.util.Map.Entry<UUID, java.util.List<com.feadev.eaids.league.model.LeagueStatEntry>> entry
+                    : byPlayer.entrySet()) {
+
+                TeamPlayer tp = entry.getValue().get(0).getTeamPlayer();
+                java.util.List<com.feadev.eaids.league.model.LeagueStatEntry> playerEntries = entry.getValue();
+
+                // Skip if already exists (upsert guard)
+                if (postGameSummaryRepository.findByFixtureIdAndTeamPlayerId(
+                        fixture.getId(), tp.getId()).isPresent()) {
+                    continue;
+                }
+
+                BigDecimal passingYards   = sumStatByName(playerEntries, "Passing Yards");
+                BigDecimal rushingYards   = sumStatByName(playerEntries, "Rushing Yards");
+                BigDecimal receivingYards = sumStatByName(playerEntries, "Receiving Yards");
+                BigDecimal tackles        = sumStatByName(playerEntries, "Tackles");
+                BigDecimal touchdowns     = sumStatByName(playerEntries, "Touchdowns");
+                BigDecimal interceptions  = sumStatByName(playerEntries, "Interceptions");
+                BigDecimal sacks          = sumStatByName(playerEntries, "Sacks");
+                BigDecimal fumbles        = sumStatByName(playerEntries, "Fumbles");
+                BigDecimal penalties      = sumStatByName(playerEntries, "Penalties");
+
+                summaries.add(PostGameSummary.builder()
+                        .fixture(fixture)
+                        .teamPlayer(tp)
+                        .athleteUserId(tp.getAthlete().getId())
+                        .teamId(tp.getTeam().getId())
+                        .totalPassingYards(nullIfZero(passingYards))
+                        .totalRushingYards(nullIfZero(rushingYards))
+                        .totalReceivingYards(nullIfZero(receivingYards))
+                        .totalTackles(nullIfZero(tackles))
+                        .touchdowns(nullIfZero(touchdowns))
+                        .interceptions(nullIfZero(interceptions))
+                        .sacks(nullIfZero(sacks))
+                        .fumbles(nullIfZero(fumbles))
+                        .penalties(nullIfZero(penalties))
+                        .customStats(null)
+                        .computedAt(LocalDateTime.now())
+                        .build());
+            }
+        }
+
+        if (!summaries.isEmpty()) {
+            postGameSummaryRepository.saveAll(summaries);
+        }
+        log.info("Seeded {} post-game summaries across {} completed fixtures",
+                summaries.size(), completedFixtures.size());
+    }
+
+    private BigDecimal sumStatByName(
+            java.util.List<com.feadev.eaids.league.model.LeagueStatEntry> entries,
+            String statName) {
+        return entries.stream()
+                .filter(e -> statName.equalsIgnoreCase(e.getDefinition().getStatName()))
+                .map(com.feadev.eaids.league.model.LeagueStatEntry::getValue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal nullIfZero(BigDecimal value) {
+        return (value == null || value.compareTo(BigDecimal.ZERO) == 0) ? null : value;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // Additional injuries for non-trivial risk scores
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Seeds additional injury records so the risk engine produces interesting output:
+     * <ul>
+     *   <li>Athlete 1 (QB) — two additional injuries in the last 12 months →
+     *       HIGH_INJURY_FREQUENCY flag, score MEDIUM/HIGH depending on full history.</li>
+     *   <li>Athlete 2 (WR) — already has a suspected concussion; add one more HEAD_NECK
+     *       injury and an ankle sprain to trigger RECURRENT_BODY_REGION and ACTIVE_INJURY.</li>
+     * </ul>
+     */
+    private void seedAdditionalInjuries(User adminUser, User athleteUser, User athlete2User) {
+        // Guard: only add if athlete1 has exactly 1 injury (the knee sprain from Phase 18)
+        long athlete1Count = athleteInjuryRepository.findByAthleteUserId(athleteUser.getId()).size();
+        if (athlete1Count > 1) {
+            log.info("Additional injury seed data already exists, skipping.");
+            return;
+        }
+
+        List<com.feadev.eaids.medical.model.AthleteInjury> extras = new java.util.ArrayList<>();
+
+        // ── Athlete 1: shoulder strain (6 months ago, RESOLVED) ──────────────────
+        extras.add(com.feadev.eaids.medical.model.AthleteInjury.builder()
+                .athleteUserId(athleteUser.getId())
+                .incidentDate(LocalDateTime.now().minusMonths(6))
+                .reportedDate(LocalDateTime.now().minusMonths(6).plusHours(1))
+                .incidentLocation("Training — Onikan Stadium")
+                .injuryContext(com.feadev.eaids.medical.model.enums.InjuryContext.TRAINING.name())
+                .bodyRegion(com.feadev.eaids.medical.model.enums.BodyRegion.SHOULDER_UPPER_ARM.name())
+                .injuryCategory(com.feadev.eaids.medical.model.enums.InjuryCategory.STRAIN.name())
+                .isSuspectedConcussion(false)
+                .mechanismOfInjury("Overhead throwing motion — overuse strain.")
+                .symptomsReported("Anterior shoulder pain, reduced range of motion.")
+                .severity("MILD")
+                .confirmedDiagnosis("Rotator cuff strain, left shoulder.")
+                .initialResponse("Ice, rest, NSAIDs.")
+                .rehabilitationStatus("Completed")
+                .status(com.feadev.eaids.medical.model.enums.InjuryStatus.RESOLVED.name())
+                .reportedBy(adminUser.getId())
+                .recordedBy(adminUser.getId())
+                .build());
+
+        // ── Athlete 1: ankle sprain (3 months ago, CLOSED) ───────────────────────
+        extras.add(com.feadev.eaids.medical.model.AthleteInjury.builder()
+                .athleteUserId(athleteUser.getId())
+                .incidentDate(LocalDateTime.now().minusMonths(3))
+                .reportedDate(LocalDateTime.now().minusMonths(3).plusHours(2))
+                .incidentLocation("Onikan Stadium — pre-season scrimmage")
+                .injuryContext(com.feadev.eaids.medical.model.enums.InjuryContext.CAMP.name())
+                .bodyRegion(com.feadev.eaids.medical.model.enums.BodyRegion.ANKLE_FOOT.name())
+                .injuryCategory(com.feadev.eaids.medical.model.enums.InjuryCategory.SPRAIN.name())
+                .isSuspectedConcussion(false)
+                .mechanismOfInjury("Rolled left ankle on uneven turf during scramble.")
+                .symptomsReported("Lateral ankle pain and swelling. Weight-bearing painful.")
+                .severity("MILD")
+                .confirmedDiagnosis("Grade I lateral ankle sprain.")
+                .initialResponse("RICE, ankle brace fitted.")
+                .rehabilitationStatus("Completed")
+                .status(com.feadev.eaids.medical.model.enums.InjuryStatus.CLOSED.name())
+                .reportedBy(adminUser.getId())
+                .recordedBy(adminUser.getId())
+                .build());
+
+        // Athlete 1 now has 3 injuries in 12 months → triggers HIGH_INJURY_FREQUENCY (+2 pts) → MEDIUM risk
+
+        // ── Athlete 2: second HEAD_NECK injury (4 months ago, RESOLVED) ──────────
+        // Combined with the existing suspected concussion → RECURRENT_BODY_REGION:HEAD_NECK
+        extras.add(com.feadev.eaids.medical.model.AthleteInjury.builder()
+                .athleteUserId(athlete2User.getId())
+                .incidentDate(LocalDateTime.now().minusMonths(4))
+                .reportedDate(LocalDateTime.now().minusMonths(4).plusHours(1))
+                .incidentLocation("Training — National Stadium Abuja")
+                .injuryContext(com.feadev.eaids.medical.model.enums.InjuryContext.TRAINING.name())
+                .bodyRegion(com.feadev.eaids.medical.model.enums.BodyRegion.HEAD_NECK.name())
+                .injuryCategory(com.feadev.eaids.medical.model.enums.InjuryCategory.CONTUSION.name())
+                .isSuspectedConcussion(false)
+                .mechanismOfInjury(
+                        "Caught stray elbow to the back of the head during a contact drill. " +
+                        "No loss of consciousness.")
+                .symptomsReported("Mild headache, no visual disturbance, no confusion. " +
+                        "Cleared for return to play after 30-minute observation.")
+                .severity("MILD")
+                .confirmedDiagnosis("Minor head contusion — no concussion criteria met.")
+                .initialResponse("Removed from practice for 30 minutes. " +
+                        "Monitored under concussion protocol as precaution.")
+                .rehabilitationStatus("Completed")
+                .status(com.feadev.eaids.medical.model.enums.InjuryStatus.RESOLVED.name())
+                .reportedBy(adminUser.getId())
+                .recordedBy(adminUser.getId())
+                .build());
+
+        // ── Athlete 2: knee sprain (2 months ago, UNDER_TREATMENT — active injury) ──
+        extras.add(com.feadev.eaids.medical.model.AthleteInjury.builder()
+                .athleteUserId(athlete2User.getId())
+                .incidentDate(LocalDateTime.now().minusMonths(2))
+                .reportedDate(LocalDateTime.now().minusMonths(2).plusHours(3))
+                .incidentLocation("National Stadium, Abuja — Division 1 training")
+                .injuryContext(com.feadev.eaids.medical.model.enums.InjuryContext.TRAINING.name())
+                .bodyRegion(com.feadev.eaids.medical.model.enums.BodyRegion.KNEE.name())
+                .injuryCategory(com.feadev.eaids.medical.model.enums.InjuryCategory.SPRAIN.name())
+                .isSuspectedConcussion(false)
+                .mechanismOfInjury(
+                        "Hyperextension during a jump ball contest. " +
+                        "Landed awkwardly on straight leg.")
+                .symptomsReported(
+                        "Posterior knee pain, mild swelling. " +
+                        "Stable Lachman test. Unable to complete training session.")
+                .severity("MODERATE")
+                .confirmedDiagnosis("Grade I posterior cruciate ligament sprain, right knee.")
+                .initialResponse("RICE protocol. NSAIDs prescribed. Crutches issued.")
+                .treatmentPlan(
+                        "3–4 week structured physio programme. " +
+                        "Focus on quadriceps strengthening and proprioception.")
+                .rehabilitationStatus("Ongoing — week 3 of 4")
+                .participationRestrictions("Non-contact training only. No competition.")
+                .status(com.feadev.eaids.medical.model.enums.InjuryStatus.UNDER_TREATMENT.name())
+                .reportedBy(adminUser.getId())
+                .recordedBy(adminUser.getId())
+                .build());
+
+        // Athlete 2 now has:
+        //  - CONCUSSION_HISTORY       (existing suspected concussion, < 24 months)  → +3
+        //  - ACTIVE_INJURY            (knee, UNDER_TREATMENT)                       → +1
+        //  - RECURRENT_BODY_REGION:HEAD_NECK (2 head/neck injuries)                 → +1
+        //  - PRE_EXISTING_CONDITIONS  (exercise-induced bronchoconstriction)         → +1
+        //  - CARDIAC_RISK_FLAG        (familyCardiacHistory = true on profile)       → +1
+        //  - ONGOING_REHABILITATION   (knee injury has rehabilitationStatus)         → +1
+        //  Total score = 8 → CRITICAL
+
+        athleteInjuryRepository.saveAll(extras);
+        log.info("Seeded {} additional injury records "
+                + "(athlete1: shoulder strain + ankle sprain → MEDIUM risk; "
+                + "athlete2: head contusion + knee sprain → CRITICAL risk)",
+                extras.size());
     }
 }

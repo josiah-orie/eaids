@@ -13,7 +13,15 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TeamPlayerResponse {
+    /** Primary key of the TeamPlayer join record. */
+    private UUID id;
+    /** Alias for {@code id} — used by the roster endpoint for clarity. */
     private UUID teamPlayerId;
+    private UUID teamId;
+    private String teamName;
+    /** Athlete's user ID. */
+    private UUID athleteUserId;
+    /** Alias for {@code athleteUserId} — used by the roster endpoint for clarity. */
     private UUID athleteId;
     private String athleteEmail;
     private Integer jerseyNumber;

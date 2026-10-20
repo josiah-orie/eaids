@@ -35,6 +35,8 @@ import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
+
 import java.util.stream.Collectors;
 
 @Service
@@ -50,6 +52,9 @@ public class AthleteServiceImpl implements AthleteService {
     private final ApplicationEventPublisher eventPublisher;
     private final AuditService auditService;
     private final StorageService storageService;
+
+    @Value("${app.base-url}")
+    private String baseUrl;
 
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/jpg", "image/png");
     private static final long MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -250,11 +255,11 @@ public class AthleteServiceImpl implements AthleteService {
 
         // Delete existing profile image if present
         if (profile.getProfileImageUrl() != null) {
-            storageService.delete(profile.getProfileImageUrl());
+            storageService.delete(extractRelativePath(profile.getProfileImageUrl()));
         }
 
         String storedPath = storageService.store(file, "athletes/" + userId + "/profile");
-        profile.setProfileImageUrl(storedPath);
+        profile.setProfileImageUrl(buildAbsoluteImageUrl(storedPath));
         AthleteProfile savedProfile = athleteProfileRepository.save(profile);
 
         log.info("Profile image uploaded for user {}", userId);
@@ -270,11 +275,11 @@ public class AthleteServiceImpl implements AthleteService {
 
         // Delete existing icon image if present
         if (profile.getIconImageUrl() != null) {
-            storageService.delete(profile.getIconImageUrl());
+            storageService.delete(extractRelativePath(profile.getIconImageUrl()));
         }
 
         String storedPath = storageService.store(file, "athletes/" + userId + "/icon");
-        profile.setIconImageUrl(storedPath);
+        profile.setIconImageUrl(buildAbsoluteImageUrl(storedPath));
         AthleteProfile savedProfile = athleteProfileRepository.save(profile);
 
         log.info("Icon/passport image uploaded for user {}", userId);
@@ -328,5 +333,23 @@ public class AthleteServiceImpl implements AthleteService {
                 .videoType(video.getVideoType().name())
                 .createdDate(video.getCreatedDate())
                 .build();
+    }
+
+    private String buildAbsoluteImageUrl(String relativePath) {
+        String base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
+        return base + "/storage/" + path;
+    }
+
+    private String extractRelativePath(String absoluteUrl) {
+        String base = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        String storagePrefix = base + "storage/";
+        if (absoluteUrl.startsWith(storagePrefix)) {
+            return absoluteUrl.substring(storagePrefix.length());
+        }
+        if (absoluteUrl.startsWith(base)) {
+            return absoluteUrl.substring(base.length());
+        }
+        return absoluteUrl; // fallback: already a relative path
     }
 }

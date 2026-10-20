@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL,
     phone_number VARCHAR(20) NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role ENUM('ROLE_ATHLETE', 'ROLE_COACH', 'ROLE_ADMIN', 'ROLE_SCOUT') NOT NULL,
+    role ENUM('ROLE_ATHLETE', 'ROLE_COACH', 'ROLE_ADMIN', 'ROLE_SCOUT', 'ROLE_MEDICAL_OFFICER', 'ROLE_PHYSIOTHERAPIST') NOT NULL,
     status ENUM('PENDING_VERIFICATION', 'PENDING_CONSENT', 'UNDER_REVIEW', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'ARCHIVED') NOT NULL,
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
@@ -930,9 +930,9 @@ CREATE TABLE IF NOT EXISTS interview_requests (
 -- (Handles existing databases where CREATE TABLE IF NOT EXISTS is a no-op)
 -- =====================================================
 
--- Add ROLE_SCOUT to users.role ENUM (may already exist on fresh databases)
+-- Add ROLE_SCOUT + medical staff roles to users.role ENUM (may already exist on fresh databases)
 ALTER TABLE users
-    MODIFY COLUMN role ENUM('ROLE_ATHLETE', 'ROLE_COACH', 'ROLE_ADMIN', 'ROLE_SCOUT') NOT NULL;
+    MODIFY COLUMN role ENUM('ROLE_ATHLETE', 'ROLE_COACH', 'ROLE_ADMIN', 'ROLE_SCOUT', 'ROLE_MEDICAL_OFFICER', 'ROLE_PHYSIOTHERAPIST') NOT NULL;
 
 -- Add ROLE_SCOUT to camp_evaluators.role ENUM (may already exist on fresh databases)
 ALTER TABLE camp_evaluators

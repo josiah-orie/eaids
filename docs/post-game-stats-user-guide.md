@@ -24,6 +24,7 @@ The Post-Game Stats module generates a per-athlete performance snapshot after ev
 | Get athlete's career post-game history | — | ✓ | ✓ |
 | Trigger manual recomputation | — | — | ✓ |
 | Update player stats (field-level) | — | — | ✓ |
+| Create custom stat definition | — | — | ✓ |
 
 ---
 
@@ -324,6 +325,73 @@ To remove a stat entirely (set it back to `null` / "not recorded"), use the reco
 
 ---
 
+## Create a Custom Stat Definition (Admin)
+
+Adds a new match stat definition so scouts and coaches can record that stat against enrollments. Stat names must be unique within a position group — attempting to create a duplicate returns `400`.
+
+**Role required:** `ADMIN`
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/camps/{campId}/match-stats/definitions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{
+    "positionGroup": "DEFENSE",
+    "statName": "Forced Fumbles",
+    "unit": "count",
+    "displayOrder": 10
+  }'
+```
+
+**Request body fields:**
+
+| Field | Type | Required | Constraint | Description |
+|-------|------|:--------:|-----------|-------------|
+| `positionGroup` | string | ✓ | One of `QUARTERBACK`, `RECEIVER`, `DEFENSE`, `SPECIAL_TEAMS` | Position group this stat applies to |
+| `statName` | string | ✓ | Max 100 chars, unique per `positionGroup` | Display name of the stat |
+| `unit` | string | — | Max 30 chars | Optional unit label (e.g. `yards`, `count`) |
+| `displayOrder` | integer | — | ≥ 0, defaults to `0` | Controls ordering in UI and reports |
+
+**Response (201 Created):**
+```json
+{
+  "id": "d7e8f9a0-b1c2-3456-dabc-789012345678",
+  "positionGroup": "DEFENSE",
+  "statName": "Forced Fumbles",
+  "unit": "count",
+  "displayOrder": 10,
+  "active": true
+}
+```
+
+**Error (400 Bad Request)** — duplicate stat name for the position group:
+```json
+{
+  "status": 400,
+  "message": "A stat definition with name 'Forced Fumbles' already exists for position group DEFENSE"
+}
+```
+
+**Error (400 Bad Request)** — validation failure (missing required field, value out of range):
+```json
+{
+  "status": 400,
+  "message": "positionGroup is required"
+}
+```
+
+**Error (403 Forbidden)** — caller does not have the `ADMIN` role:
+```json
+{
+  "status": 403,
+  "message": "Forbidden: You do not have permission to access this resource"
+}
+```
+
+> **Note:** Once created, the definition is immediately `active` and will be returned by `GET /definitions`. To use the new stat in a game, reference its `id` as `definitionId` when recording match stats. Custom definitions whose names don't match the nine core stat columns will appear in the `customStats` map of post-game summaries.
+
+---
+
 ## Stat Column Reference
 
 | JSON field | Stat name matched | Typical position |
@@ -394,8 +462,9 @@ curl -X GET "http://localhost:8080/api/v1/fixtures/$FIXTURE_ID/post-game" \
 | Fixture not found | 404 | `Fixture not found: {id}` |
 | Player summary not found | 404 | `Post-game summary not found for fixture {id} and player {id}` |
 | Unauthenticated read | 401 | `Unauthorized: Authentication is required...` |
-| Non-admin recompute or field-level update | 403 | `Forbidden: You do not have permission...` |
+| Non-admin recompute, field-level update, or definition create | 403 | `Forbidden: You do not have permission...` |
 | Update on non-active fixture | 400 | `Post-game stats can only be updated when the fixture is IN_PROGRESS or COMPLETED. Current status: {status}` |
+| Duplicate stat definition name | 400 | `A stat definition with name '{name}' already exists for position group {group}` |
 
 ---
 

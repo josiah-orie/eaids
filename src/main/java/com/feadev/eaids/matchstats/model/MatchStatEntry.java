@@ -35,6 +35,9 @@ public class MatchStatEntry {
     @Column(name = "camp_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID campId;
 
+    @Column(name = "fixture_id", columnDefinition = "BINARY(16)")
+    private UUID fixtureId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "definition_id", nullable = false)
     private MatchStatDefinition definition;
